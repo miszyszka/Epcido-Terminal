@@ -1,32 +1,21 @@
-import { POSITION_LABEL, POSITION_SHORT } from "../domain/labels";
+import { POSITION_SHORT } from "../domain/labels";
 import type { Employee } from "../domain/types";
 
-/** Znacznik stanowiska: IM, SV, TL, E, M. Kolory marki, nigdy kolory stanów. */
+/** Znacznik stanowiska: IM, SV, TL, E, M. Kolory marki, nigdy kolory stanów. Bez dymka. */
 export function PositionMark({ employee }: { employee: Employee }) {
   return (
-    <span
-      className={`pos pos--${employee.position.toLowerCase()}`}
-      data-tip={POSITION_LABEL[employee.position] + (employee.position === "TEAM_LEADER" && employee.trade ? `, ${employee.trade === "ELECTRICAL" ? "elektryka" : "mechanika"}` : "")}
-      aria-hidden
-    >
+    <span className={`pos pos--${employee.position.toLowerCase()}`} aria-hidden>
       {POSITION_SHORT[employee.position]}
     </span>
   );
 }
 
-export function PersonChip({ employee, onClick }: { employee: Employee; onClick?: () => void }) {
-  const content = (
-    <>
+export function PersonChip({ employee }: { employee: Employee }) {
+  return (
+    <span className="chip">
       <PositionMark employee={employee} />
       <span className="chip__name">{employee.name}</span>
-    </>
-  );
-  return onClick ? (
-    <button type="button" className="chip" onClick={onClick}>
-      {content}
-    </button>
-  ) : (
-    <span className="chip">{content}</span>
+    </span>
   );
 }
 

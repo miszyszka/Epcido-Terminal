@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
 
 interface FieldProps {
   label: string;
@@ -25,19 +24,6 @@ export function Field({ label, htmlFor, error, hint, children, optional }: Field
       ) : (
         hint && <p className="field__hint">{hint}</p>
       )}
-    </div>
-  );
-}
-
-type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean };
-
-export function Select({ invalid, className, children, ...rest }: SelectProps) {
-  return (
-    <div className="select">
-      <select className={`control ${invalid ? "is-invalid" : ""} ${className ?? ""}`} {...rest}>
-        {children}
-      </select>
-      <ChevronDown size={18} className="select__chevron" aria-hidden />
     </div>
   );
 }

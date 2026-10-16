@@ -1,22 +1,33 @@
-import { useModel } from "../../app/DataContext";
+import { useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { PageHeader } from "../../components/PageHeader";
 import { PersonChip, PositionMark, ProjectDot } from "../../components/PersonBadge";
 import type { Employee } from "../../domain/types";
 import { matches } from "../../lib/search";
+import { canEditProject, visibleProjects as allowedProjects } from "../../domain/permissions";
+import { todayISO } from "../../lib/dates";
 import { people as peopleCount, projectsCount } from "../../lib/text";
 
 /** Drzewko podległości: Installation Manager → projekt i Supervisor → zespół. */
 export function StructureView() {
   const model = useModel();
+  const user = useUser();
   const { search, openProject } = useUi();
-  const ims = model.employees.filter((e) => e.position === "INSTALLATION_MANAGER");
-  const orphanProjects = model.projects.filter((p) => !p.installationManagerId);
+  const today = todayISO();
+  const allowed = new Set(allowedProjects(model, user).map((p) => p.id));
+  const scoped = model.projects.filter((p) => allowed.has(p.id));
+  const ims = model.employees.filter((e) => e.position === "INSTALLATION_MANAGER" && scoped.some((p) => p.installationManagerId === e.id));
+  const orphanProjects = scoped.filter((p) => !p.installationManagerId);
   const bench = model.employees.filter(
     (e) =>
       (e.position === "TEAM_LEADER" || e.position === "ELECTRICIAN" || e.position === "MECHANIC") &&
-      !model.assignmentByEmployee.has(e.id)
+      !model.activeAssignment(e.id, today)
   );
+  const showBench = user.role === "ADMIN" || user.role === "PLANNING";
+  const open = (id: string) => {
+    const p = model.projectById.get(id);
+    if (p && canEditProject(user, p)) openProject(id);
+  };
 
   const visibleProjects = (projectIds: string[]) =>
     projectIds
@@ -42,7 +53,7 @@ export function StructureView() {
 
       <div className="org">
         {ims.map((im) => {
-          const projectIds = model.projects.filter((p) => p.installationManagerId === im.id).map((p) => p.id);
+          const projectIds = scoped.filter((p) => p.installationManagerId === im.id).map((p) => p.id);
           const teams = visibleProjects(projectIds);
           if (search && teams.length === 0 && !matches(search, im.name)) return null;
           const people = teams.reduce((n, t) => n + t.members.length + (t.supervisor ? 1 : 0), 0);
@@ -60,7 +71,7 @@ export function StructureView() {
               <ul className="org-branch">
                 {teams.map((t) => (
                   <li key={t.project.id} className="org-project">
-                    <button type="button" className="org-project__head" onClick={() => openProject(t.project.id)}>
+                    <button type="button" className="org-project__head" onClick={() => open(t.project.id)}>
                       <ProjectDot color={t.project.color} />
                       <span className="org-project__name">{t.project.name}</span>
                       <span className="org-project__number">{t.project.number}</span>
@@ -72,7 +83,7 @@ export function StructureView() {
                           <span>{t.supervisor.name}</span>
                         </>
                       ) : (
-                        <button type="button" className="btn btn--quiet btn--sm" onClick={() => openProject(t.project.id)}>
+                        <button type="button" className="btn btn--quiet btn--sm" onClick={() => open(t.project.id)}>
                           Wybierz supervisora
                         </button>
                       )}
@@ -106,7 +117,7 @@ export function StructureView() {
             <ul className="org-branch">
               {orphanProjects.map((p) => (
                 <li key={p.id} className="org-project">
-                  <button type="button" className="org-project__head" onClick={() => openProject(p.id, "details")}>
+                  <button type="button" className="org-project__head" onClick={() => open(p.id)}>
                     <ProjectDot color={p.color} />
                     <span className="org-project__name">{p.name}</span>
                   </button>
@@ -117,6 +128,7 @@ export function StructureView() {
         )}
       </div>
 
+      {showBench && (
       <section className="bench">
         <h2 className="section-title">Bez zespołu</h2>
         <p className="section-lead">
@@ -130,6 +142,7 @@ export function StructureView() {
           <TeamGroup label="Mechanicy" people={bench.filter((e) => e.position === "MECHANIC")} />
         </div>
       </section>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 # Epcido Terminal
 
 System planowania projektów i czasu pracy dla Epcido — następca Gantbee.
-Etap: **prototyp widoku planisty** (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
+Etap: **prototyp 0.3** — planowanie, zatwierdzanie godzin, ekran pracownika (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
 
 ## Uruchomienie
 
@@ -27,28 +27,37 @@ npm run dev
 
 ## Co jest w środku
 
-| Ekran | Adres | Co robi |
-|---|---|---|
-| Mapa | `/mapa` | Wszystkie projekty jako siatki dni (12 tygodni). Kolor dnia = stan godzin. |
-| Oś czasu | `/os-czasu` | Każda osoba dzień po dniu, grupowane po projektach. `?projekt=ID` pokazuje jeden projekt. |
-| Struktura | `/struktura` | Drzewko: Installation Manager → projekt i Supervisor → zespół. |
-| Ludzie | `/ludzie` | Lista osób, filtry, przypisywanie i przenoszenie między projektami. |
-| Brandbook | `/brandbook` | Żywy podgląd kolorów, kroju i komponentów. |
+Po lewej **panel roboczy** (tylko prototyp): przełączasz osobę i widzisz system jej oczami. Tam też jest macierz uprawnień i obsługa danych testowych.
 
-Przycisk **+** w docku tworzy nowy projekt. Kliknięcie nazwy projektu otwiera panel: zespół, dane projektu, historia zmian.
+| Ekran | Adres | Kto | Co robi |
+|---|---|---|---|
+| Pulpit | `/pulpit` | Installation Manager, Admin | Supervisorzy i ich zaległości w zatwierdzaniu |
+| Zatwierdzanie | `/zatwierdzanie` | Supervisor, IM, Admin | Pozycje i godziny do zatwierdzenia, zatwierdź / odrzuć z powodem |
+| Moje godziny | `/moje-godziny` | Pracownik, TL, Supervisor | Wpis dnia na telefonie, tydzień, nieobecność |
+| Mapa | `/mapa` | wszyscy poza pracownikami | Projekty: wiersze = ludzie, kolumny = dni |
+| Oś czasu | `/os-czasu` | jw. | Godziny od–do, przerwa, powód nieobecności |
+| Struktura | `/struktura` | Planning, PM, IM, Admin | IM → projekt i Supervisor → zespół |
+| Ludzie | `/ludzie` | Planning, IM, Admin | Lista osób, przypisywanie do projektów |
+| Brandbook | `/brandbook` | wszyscy | Kolory, krój, komponenty |
 
-### Kolory dni (obowiązują w całym systemie)
+„Dodaj nowy projekt" u góry (Admin, Planning, PM) i kliknięcie nazwy projektu otwierają **edytor na pełnym ekranie**: dane projektu, plan zespołu z paskami od–do i historię zmian.
 
-| Kolor | Znaczenie |
+Przycisk „Wersja mobilna" pokazuje aplikację w ramce telefonu.
+
+### Kolory i znaki dni (obowiązują w całym systemie)
+
+| Znak | Znaczenie |
 |---|---|
 | Deep Forest `#0F3D3A` | Zatwierdzone przez supervisora |
-| Golden Hour `#F4B13B` | Czeka na zatwierdzenie |
+| Golden Hour `#F4B13B` | Do zatwierdzenia |
 | Terracotta Clay `#E0745E` | Nieobecny |
-| Biały | Wolne lub brak wpisu |
+| Biały / piaskowy w weekend | Wolne lub brak wpisu |
+| Zielony ptaszek | Wysłane do Dataverse |
+| Przerywana kreska pn \| wt | Koniec edycji godzin poprzedniego tygodnia |
 
 ### Dane testowe
 
-4 Installation Managerów, 10 Supervisorów, 20 Team Leaderów, 50 elektryków, 50 mechaników, 10 projektów, godziny z ostatnich 10 tygodni. Generator: `src/data/seed.ts` (deterministyczny — u każdego te same dane).
+Administrator, Planista, 3 Project Managerów, 4 Installation Managerów, 10 Supervisorów, 20 Team Leaderów, 50 elektryków, 50 mechaników, 10 projektów, okresy pracy od–do i godziny z ostatnich 10 tygodni. Generator: `src/data/seed.ts` (deterministyczny). Jeśli w Firebase są dane z wersji 0.2, aplikacja zaproponuje ich wymianę.
 
 ## Struktura kodu
 
@@ -57,9 +66,9 @@ src/
   app/          DataContext (dane + akcje), UiContext (wyszukiwanie, panel, komunikaty)
   data/         repository.ts (granica z bazą), commands.ts (zmiany + dziennik),
                 firestoreRepo.ts, memoryRepo.ts (demo), seed.ts
-  domain/       typy, etykiety, reguła stanu dnia projektu
+  domain/       typy, etykiety, permissions.ts (role), workflow.ts (terminy, kolejki)
   components/   kropka dnia, dock, panel, kalendarz, pola formularza…
-  features/     map, timeline, structure, people, project, brandbook
+  features/     approvals, dashboard, worker, map, timeline, grid, project, structure, people, brandbook
   styles/       tokens.css (źródło prawdy designu), base, components, views
 docs/
   BRANDBOOK.md  zasady designu dla wszystkich modułów
@@ -71,4 +80,4 @@ Zasada: ekrany nie rozmawiają z bazą. Każda zmiana to polecenie w `commands.t
 
 ## Wdrożenie (Vercel)
 
-Repozytorium → vercel.com → Add Project → preset **Vite** → Deploy. Plik `vercel.json` obsługuje adresy podstron.
+Repozytorium → vercel.com → Add Project → preset **Vite**, **Root Directory: `epcido-frontend`** → Deploy. Plik `vercel.json` obsługuje adresy podstron.

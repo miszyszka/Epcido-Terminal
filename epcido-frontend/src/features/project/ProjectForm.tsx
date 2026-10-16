@@ -1,18 +1,19 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useModel } from "../../app/DataContext";
 import { DatePicker } from "../../components/DatePicker";
-import { Field, Select, TextInput } from "../../components/Field";
-import { validateProject } from "../../data/commands";
+import { Field, TextInput } from "../../components/Field";
+import { SelectMenu } from "../../components/SelectMenu";
 import { BRANCHES, PROJECT_COLORS, PROJECT_STATUS_LABEL } from "../../domain/labels";
 import type { Project, ProjectInput, ProjectStatus } from "../../domain/types";
 import { todayISO } from "../../lib/dates";
 
-export const PROJECT_FORM_ID = "project-form";
-
 interface ProjectFormProps {
-  initial?: Project;
-  onSubmit: (input: ProjectInput) => Promise<void>;
+  values: ProjectInput;
+  onChange: <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => void;
+  errors: Record<string, string>;
+  projectId: string | null;
+  readOnly?: boolean;
 }
 
 export function projectToInput(p: Project): ProjectInput {
@@ -23,60 +24,64 @@ export function projectToInput(p: Project): ProjectInput {
   return input;
 }
 
-/** Formularz projektu — te same pola przy tworzeniu i edycji. Sekcje jak w Gantbee, bez zbędnych pól. */
-export function ProjectForm({ initial, onSubmit }: ProjectFormProps) {
+export function emptyProjectInput(projects: Project[], pmId: string | null): ProjectInput {
+  const max = projects.reduce((m, p) => Math.max(m, Number.parseInt(p.number, 10) || 0), 26000);
+  const usage = new Map(PROJECT_COLORS.map((c) => [c.value, 0]));
+  projects.forEach((p) => usage.set(p.color, (usage.get(p.color) ?? 0) + 1));
+  const color = [...usage.entries()].sort((a, b) => a[1] - b[1])[0][0];
+  return {
+    number: String(max + 1),
+    name: "",
+    customerName: "",
+    customerOrderNo: "",
+    siteAddress: "",
+    country: "",
+    branch: "Polska",
+    color,
+    startDate: todayISO(),
+    endDate: null,
+    status: "PLANNED",
+    projectManagerId: pmId,
+    installationManagerId: null,
+    supervisorId: null,
+    dataverseId: "",
+    dataverseNumber: "",
+  };
+}
+
+/** Dane projektu — te same pola przy tworzeniu i edycji. Sekcje jak w Gantbee, bez zbędnych pól. */
+export function ProjectForm({ values, onChange: set, errors, projectId, readOnly }: ProjectFormProps) {
   const model = useModel();
-  const [values, setValues] = useState<ProjectInput>(() => (initial ? projectToInput(initial) : emptyInput(model.projects)));
-  const [attempted, setAttempted] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const errors = useMemo(
-    () => (attempted ? validateProject(values, model.snapshot, initial?.id) : {}),
-    [attempted, values, model.snapshot, initial?.id]
-  );
-  const set = <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => setValues((v) => ({ ...v, [key]: value }));
-
+  const pms = model.employees.filter((e) => e.position === "PROJECT_MANAGER");
   const ims = model.employees.filter((e) => e.position === "INSTALLATION_MANAGER");
   const svs = model.employees.filter((e) => e.position === "SUPERVISOR");
   const customers = useMemo(() => [...new Set(model.projects.map((p) => p.customerName))].sort(), [model.projects]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setAttempted(true);
-    if (Object.keys(validateProject(values, model.snapshot, initial?.id)).length > 0) return;
-    setSaving(true);
-    try {
-      await onSubmit(values);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
-    <form id={PROJECT_FORM_ID} className="form" onSubmit={handleSubmit} noValidate aria-busy={saving}>
-      <fieldset className="form-section">
-        <legend>Ogólne</legend>
+    <fieldset className="form" disabled={readOnly}>
+      <section className="form-section">
+        <h3 className="form-section__title">Ogólne</h3>
         <div className="form-grid">
           <Field label="Numer projektu" htmlFor="f-number" error={errors.number}>
             <TextInput id="f-number" inputMode="numeric" value={values.number} onChange={(e) => set("number", e.target.value)} invalid={!!errors.number} />
           </Field>
           <Field label="Status" htmlFor="f-status">
-            <Select id="f-status" value={values.status} onChange={(e) => set("status", e.target.value as ProjectStatus)}>
-              {(Object.keys(PROJECT_STATUS_LABEL) as ProjectStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {PROJECT_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </Select>
+            <SelectMenu<ProjectStatus>
+              id="f-status"
+              value={values.status}
+              onChange={(v) => set("status", v)}
+              options={(Object.keys(PROJECT_STATUS_LABEL) as ProjectStatus[]).map((s) => ({ value: s, label: PROJECT_STATUS_LABEL[s] }))}
+              disabled={readOnly}
+            />
           </Field>
         </div>
         <Field label="Nazwa projektu" htmlFor="f-name" error={errors.name} hint="Np. P26011-Klient-Miasto">
           <TextInput id="f-name" value={values.name} onChange={(e) => set("name", e.target.value)} invalid={!!errors.name} />
         </Field>
-      </fieldset>
+      </section>
 
-      <fieldset className="form-section">
-        <legend>Klient i budowa</legend>
+      <section className="form-section">
+        <h3 className="form-section__title">Klient i budowa</h3>
         <Field label="Klient" htmlFor="f-customer" error={errors.customerName}>
           <TextInput
             id="f-customer"
@@ -102,10 +107,10 @@ export function ProjectForm({ initial, onSubmit }: ProjectFormProps) {
             <TextInput id="f-country" value={values.country} onChange={(e) => set("country", e.target.value)} />
           </Field>
         </div>
-      </fieldset>
+      </section>
 
-      <fieldset className="form-section">
-        <legend>Termin</legend>
+      <section className="form-section">
+        <h3 className="form-section__title">Termin</h3>
         <div className="form-grid">
           <Field label="Start" htmlFor="f-start" error={errors.startDate}>
             <DatePicker id="f-start" value={values.startDate || null} onChange={(v) => set("startDate", v ?? "")} invalid={!!errors.startDate} />
@@ -123,50 +128,56 @@ export function ProjectForm({ initial, onSubmit }: ProjectFormProps) {
             />
           </Field>
         </div>
-      </fieldset>
+      </section>
 
-      <fieldset className="form-section">
-        <legend>Organizacja</legend>
+      <section className="form-section">
+        <h3 className="form-section__title">Organizacja</h3>
         <div className="form-grid">
           <Field label="Oddział" htmlFor="f-branch" error={errors.branch}>
-            <Select id="f-branch" value={values.branch} onChange={(e) => set("branch", e.target.value)} invalid={!!errors.branch}>
-              <option value="">Wybierz oddział</option>
-              {BRANCHES.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </Select>
+            <SelectMenu
+              id="f-branch"
+              value={values.branch || null}
+              onChange={(v) => set("branch", v)}
+              options={BRANCHES.map((b) => ({ value: b, label: b }))}
+              placeholder="Wybierz oddział"
+              invalid={!!errors.branch}
+              disabled={readOnly}
+            />
           </Field>
-          <Field label="Installation Manager" htmlFor="f-im" error={errors.installationManagerId}>
-            <Select
-              id="f-im"
-              value={values.installationManagerId ?? ""}
-              onChange={(e) => set("installationManagerId", e.target.value || null)}
-              invalid={!!errors.installationManagerId}
-            >
-              <option value="">Wybierz osobę</option>
-              {ims.map((im) => (
-                <option key={im.id} value={im.id}>
-                  {im.name}
-                </option>
-              ))}
-            </Select>
+          <Field label="Project Manager" htmlFor="f-pm" optional>
+            <SelectMenu
+              id="f-pm"
+              value={values.projectManagerId}
+              onChange={(v) => set("projectManagerId", v)}
+              options={pms.map((e) => ({ value: e.id, label: e.name }))}
+              placeholder="Jeszcze nie wybrany"
+              disabled={readOnly}
+            />
           </Field>
         </div>
-        <Field label="Supervisor" htmlFor="f-sv" optional hint="Supervisor zatwierdza godziny zespołu. Może prowadzić kilka projektów.">
-          <Select id="f-sv" value={values.supervisorId ?? ""} onChange={(e) => set("supervisorId", e.target.value || null)}>
-            <option value="">Jeszcze nie wybrany</option>
-            {svs.map((sv) => {
-              const current = model.projects.filter((p) => p.supervisorId === sv.id && p.id !== initial?.id);
-              return (
-                <option key={sv.id} value={sv.id}>
-                  {sv.name}
-                  {current.length ? ` (prowadzi: ${current.map((p) => p.name).join(", ")})` : ""}
-                </option>
-              );
+        <Field label="Installation Manager" htmlFor="f-im" error={errors.installationManagerId} hint="Zatwierdza godziny po supervisorze.">
+          <SelectMenu
+            id="f-im"
+            value={values.installationManagerId}
+            onChange={(v) => set("installationManagerId", v)}
+            options={ims.map((e) => ({ value: e.id, label: e.name }))}
+            placeholder="Wybierz osobę"
+            invalid={!!errors.installationManagerId}
+            disabled={readOnly}
+          />
+        </Field>
+        <Field label="Supervisor" htmlFor="f-sv" optional hint="Zatwierdza godziny zespołu. Może prowadzić kilka projektów.">
+          <SelectMenu
+            id="f-sv"
+            value={values.supervisorId}
+            onChange={(v) => set("supervisorId", v)}
+            options={svs.map((sv) => {
+              const current = model.projects.filter((p) => p.supervisorId === sv.id && p.id !== projectId);
+              return { value: sv.id, label: sv.name, hint: current.length ? current.map((p) => p.name).join(", ") : "wolny" };
             })}
-          </Select>
+            placeholder="Jeszcze nie wybrany"
+            disabled={readOnly}
+          />
         </Field>
         <Field label="Kolor projektu" htmlFor="f-color-0" hint="Kolor tylko rozróżnia projekty na listach. Nie oznacza stanu.">
           <div className="swatches" role="radiogroup" aria-label="Kolor projektu">
@@ -178,7 +189,6 @@ export function ProjectForm({ initial, onSubmit }: ProjectFormProps) {
                 role="radio"
                 aria-checked={values.color === c.value}
                 aria-label={c.name}
-                data-tip={c.name}
                 className={`swatch ${values.color === c.value ? "is-selected" : ""}`}
                 style={{ background: c.value }}
                 onClick={() => set("color", c.value)}
@@ -186,10 +196,10 @@ export function ProjectForm({ initial, onSubmit }: ProjectFormProps) {
             ))}
           </div>
         </Field>
-      </fieldset>
+      </section>
 
-      <fieldset className="form-section form-section--integration">
-        <legend>Połączenie z Dataverse</legend>
+      <section className="form-section form-section--integration">
+        <h3 className="form-section__title">Połączenie z Dataverse</h3>
         <div className="notice">
           <TriangleAlert size={18} aria-hidden />
           <p>Zmiana tych pól wpływa na połączenie z Business Central. Zwykle uzupełnia je nav24 — zostaw puste, jeśli nie masz numerów.</p>
@@ -202,31 +212,7 @@ export function ProjectForm({ initial, onSubmit }: ProjectFormProps) {
             <TextInput id="f-dv-number" value={values.dataverseNumber} onChange={(e) => set("dataverseNumber", e.target.value)} />
           </Field>
         </div>
-      </fieldset>
-    </form>
+      </section>
+    </fieldset>
   );
-}
-
-function emptyInput(projects: Project[]): ProjectInput {
-  const max = projects.reduce((m, p) => Math.max(m, Number.parseInt(p.number, 10) || 0), 26000);
-  const usage = new Map(PROJECT_COLORS.map((c) => [c.value, 0]));
-  projects.forEach((p) => usage.set(p.color, (usage.get(p.color) ?? 0) + 1));
-  const color = [...usage.entries()].sort((a, b) => a[1] - b[1])[0][0];
-  return {
-    number: String(max + 1),
-    name: "",
-    customerName: "",
-    customerOrderNo: "",
-    siteAddress: "",
-    country: "",
-    branch: "Polska",
-    color,
-    startDate: todayISO(),
-    endDate: null,
-    status: "PLANNED",
-    installationManagerId: null,
-    supervisorId: null,
-    dataverseId: "",
-    dataverseNumber: "",
-  };
 }

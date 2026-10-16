@@ -9,3 +9,5 @@ export function plural(n: number, one: string, few: string, many: string): strin
 export const people = (n: number) => `${n} ${plural(n, "osoba", "osoby", "osób")}`;
 export const absences = (n: number) => `${n} ${plural(n, "nieobecność", "nieobecności", "nieobecności")}`;
 export const projectsCount = (n: number) => `${n} ${plural(n, "projekt", "projekty", "projektów")}`;
+export const positions = (n: number) => `${n} ${plural(n, "pozycja", "pozycje", "pozycji")}`;
+export const daysCount = (n: number) => `${n} ${plural(n, "dzień", "dni", "dni")}`;

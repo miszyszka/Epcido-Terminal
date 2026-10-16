@@ -38,6 +38,10 @@
   --day-absent: var(--terracotta);
   --day-off: var(--surface);
   --day-off-line: var(--line);
+  /* Ptaszek „wysłane do Dataverse" — jasna zieleń, czytelna na Deep Forest */
+  --sent: #9fe3bb;
+  /* Kreska końca edycji (poniedziałek | wtorek) */
+  --cutoff: rgb(15 61 58 / 0.55);
 
   /* Typografia */
   --font: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
@@ -80,19 +84,23 @@
 
   /* Kropki dni */
   --cell-map: 16px;
-  --cell-gap: 4px;
-  --cell-timeline: 20px;
-  --col-timeline: 26px;
+  --col-map: 20px;
+  --col-detail: 86px;
+  --name-col: 188px;
 
   /* Układ */
   --page-max: 1440px;
   --page-pad: 32px;
   --dock-clearance: 148px;
+  --panel-w: 300px;
 }
 
-@media (max-width: 720px) {
-  :root {
+/* Wąska ramka aplikacji (telefon albo podgląd mobilny) — reaguje na szerokość ramki, nie okna */
+@container app (max-width: 720px) {
+  .app-scroll > * {
     --page-pad: 16px;
     --text-3xl: 30px;
+    --name-col: 132px;
+    --col-detail: 80px;
   }
 }

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { DatePicker } from "../../components/DatePicker";
-import { DayCell } from "../../components/DayCell";
-import { Field, Select, TextInput } from "../../components/Field";
+import { DayCard, DayCell } from "../../components/DayCell";
+import { Field, TextInput } from "../../components/Field";
+import { SelectMenu } from "../../components/SelectMenu";
 import { PageHeader } from "../../components/PageHeader";
 import { Segmented } from "../../components/Segmented";
 import { DAY_STATE_LABEL, PROJECT_COLORS } from "../../domain/labels";
-import type { DayState } from "../../domain/types";
+import type { DayEntry, DayState } from "../../domain/types";
 import { todayISO } from "../../lib/dates";
 
 const BRAND = [
@@ -25,11 +26,18 @@ const WORKING = [
 ];
 
 const STATES: DayState[] = ["approved", "pending", "absent", "off"];
+const SAMPLE: Record<DayState, DayEntry | undefined> = {
+  approved: { kind: "WORK", status: "SUPERVISOR_APPROVED", start: 420, end: 1020, breakMin: 30 },
+  pending: { kind: "WORK", status: "SUBMITTED", start: 420, end: 1080, breakMin: 60 },
+  absent: { kind: "ABSENCE", status: "SUBMITTED", absence: "SICK" },
+  off: undefined,
+};
 
 /** Żywy brandbook: tokeny i komponenty dokładnie tak, jak są w aplikacji. Opis: docs/BRANDBOOK.md */
 export function BrandbookView() {
   const [date, setDate] = useState<string | null>(todayISO());
   const [seg, setSeg] = useState<"a" | "b" | "c">("a");
+  const [branch, setBranch] = useState("Polska");
 
   return (
     <div className="page brandbook">
@@ -88,18 +96,19 @@ export function BrandbookView() {
               <div className="bb-state__cells">
                 <DayCell state={s} size="mini" label={DAY_STATE_LABEL[s]} />
                 <DayCell state={s} size="map" label={DAY_STATE_LABEL[s]} />
-                <DayCell state={s} size="timeline" label={DAY_STATE_LABEL[s]} />
+                <DayCard entry={SAMPLE[s]} expected />
               </div>
               <strong>{DAY_STATE_LABEL[s]}</strong>
             </div>
           ))}
           <div className="bb-state">
             <div className="bb-state__cells">
-              <DayCell state="approved" size="map" flag label="Zatwierdzony dzień z nieobecnością" />
+              <DayCell state="approved" size="map" sent label="Wysłane do Dataverse" />
+              <DayCard entry={{ ...SAMPLE.approved!, exported: true }} />
               <DayCell state="pending" size="map" today label="Dziś" />
-              <DayCell state="off" size="map" future label="Przyszłość" />
+              <DayCell state="off" size="map" planned label="Zaplanowany dzień" />
             </div>
-            <strong>Nieobecność w dniu, dziś, przyszłość</strong>
+            <strong>Wysłane do Dataverse, dziś, dzień zaplanowany</strong>
           </div>
         </div>
       </section>
@@ -168,10 +177,16 @@ export function BrandbookView() {
               <TextInput id="bb-name" defaultValue="P26011-Nordhavn-Wrexham" />
             </Field>
             <Field label="Oddział" htmlFor="bb-branch">
-              <Select id="bb-branch" defaultValue="Polska">
-                <option>Polska</option>
-                <option>Niemcy</option>
-              </Select>
+              <SelectMenu
+                id="bb-branch"
+                value={branch}
+                onChange={setBranch}
+                options={[
+                  { value: "Polska", label: "Polska" },
+                  { value: "Niemcy", label: "Niemcy" },
+                  { value: "Beneluks", label: "Beneluks" },
+                ]}
+              />
             </Field>
             <Field label="Start" htmlFor="bb-date">
               <DatePicker id="bb-date" value={date} onChange={setDate} />

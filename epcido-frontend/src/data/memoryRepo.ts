@@ -4,9 +4,9 @@
 import { todayISO } from "../lib/dates";
 import type { AuditEvent } from "../domain/types";
 import type { ChangeSet, Repository, Snapshot } from "./repository";
-import { generateDataset } from "./seed";
+import { generateDataset, SEED_VERSION } from "./seed";
 
-const STORAGE_KEY = "epcido-demo-v1";
+const STORAGE_KEY = "epcido-demo-v3";
 
 type Store = {
   employees: Map<string, Record<string, unknown>>;
@@ -28,6 +28,7 @@ export function createMemoryRepository(): Repository {
     timesheets: values(store.timesheets),
     audit: [...store.audit].sort((a, b) => b.at.localeCompare(a.at)),
     seeded: store.meta.has("seed"),
+    seedVersion: store.meta.has("seed") ? Number(store.meta.get("seed")?.version ?? 1) : null,
   });
 
   const emit = () => {
@@ -47,6 +48,7 @@ export function createMemoryRepository(): Repository {
       for (const w of changes.writes) {
         const target = store[w.collection];
         if (w.data === null) target.delete(w.id);
+        else if (w.merge && target.has(w.id)) target.set(w.id, deepMerge(target.get(w.id)!, w.data));
         else target.set(w.id, { ...w.data, id: w.id });
       }
       store.audit.push(...changes.audit);
@@ -63,9 +65,22 @@ function fresh(): Store {
     projects: toMap(data.projects),
     assignments: toMap(data.assignments),
     timesheets: toMap(data.timesheets),
-    meta: new Map([["seed", { version: 1 }]]),
+    meta: new Map([["seed", { version: SEED_VERSION }]]),
     audit: [],
   };
+}
+
+/** Scalanie jak w Firestore set(…, { merge: true }): zagnieżdżone obiekty są łączone, reszta nadpisywana. */
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...target };
+  for (const [k, v] of Object.entries(source)) {
+    const current = out[k];
+    out[k] =
+      v && typeof v === "object" && !Array.isArray(v) && current && typeof current === "object" && !Array.isArray(current)
+        ? deepMerge(current as Record<string, unknown>, v as Record<string, unknown>)
+        : v;
+  }
+  return out;
 }
 
 function values<T>(map: Map<string, Record<string, unknown>>): T[] {
