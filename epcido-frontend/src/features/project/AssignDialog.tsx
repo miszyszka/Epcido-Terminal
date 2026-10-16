@@ -3,9 +3,10 @@ import { Search } from "lucide-react";
 import { useModel } from "../../app/DataContext";
 import { DatePicker } from "../../components/DatePicker";
 import { Dialog } from "../../components/Dialog";
-import { Field } from "../../components/Field";
+import { Field, TextInput } from "../../components/Field";
 import { PositionMark, ProjectDot } from "../../components/PersonBadge";
 import { Segmented } from "../../components/Segmented";
+import { TASK_SUGGESTIONS } from "../../domain/labels";
 import type { Position } from "../../domain/types";
 import { formatDate, todayISO, type ISODate } from "../../lib/dates";
 import { matches } from "../../lib/search";
@@ -19,7 +20,7 @@ interface AssignDialogProps {
   projectEnd: ISODate | null;
   alreadyPlanned: Set<string>;
   onClose: () => void;
-  onAssign: (employeeIds: string[], from: ISODate, to: ISODate | null) => void;
+  onAssign: (employeeIds: string[], from: ISODate, to: ISODate | null, task: string | null) => void;
 }
 
 /** Wybór pracowników do planu: widać, kto jest wolny w wybranym okresie, a kto pracuje gdzie indziej. */
@@ -31,6 +32,7 @@ export function AssignDialog({ projectId, projectStart, projectEnd, alreadyPlann
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const [task, setTask] = useState("");
 
   const candidates = useMemo(() => {
     const field = model.employees.filter((e) => e.position === "TEAM_LEADER" || e.position === "ELECTRICIAN" || e.position === "MECHANIC");
@@ -60,7 +62,7 @@ export function AssignDialog({ projectId, projectStart, projectEnd, alreadyPlann
   return (
     <Dialog
       title="Przypisz pracowników"
-      description="Wybierz okres i osoby. Okres każdej osoby zmienisz potem, przeciągając jej pasek."
+      description="Wybierz zadanie, okres i osoby. Każde zadanie zmienisz potem na planie: przeciągnij kafelek albo wstaw przerwę."
       onClose={onClose}
       footer={
         <>
@@ -68,13 +70,21 @@ export function AssignDialog({ projectId, projectStart, projectEnd, alreadyPlann
           <button type="button" className="btn btn--quiet" onClick={onClose}>
             Anuluj
           </button>
-          <button type="button" className="btn btn--primary" disabled={chosen.size === 0} onClick={() => onAssign([...chosen], from, to)}>
+          <button type="button" className="btn btn--primary" disabled={chosen.size === 0} onClick={() => onAssign([...chosen], from, to, task.trim() || null)}>
             Przypisz ({chosen.size})
           </button>
         </>
       }
     >
       <div className="assign">
+        <Field label="Zadanie" htmlFor="as-task" optional hint="Puste = według branży: prace elektryczne albo mechaniczne.">
+          <TextInput id="as-task" list="as-task-list" value={task} onChange={(e) => setTask(e.target.value)} placeholder="Np. Montaż tras kablowych" />
+          <datalist id="as-task-list">
+            {TASK_SUGGESTIONS.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+        </Field>
         <div className="form-grid">
           <Field label="Od" htmlFor="as-from">
             <DatePicker id="as-from" value={from} onChange={(v) => v && setFrom(v)} />
@@ -113,7 +123,7 @@ export function AssignDialog({ projectId, projectStart, projectEnd, alreadyPlann
                   <PositionMark employee={employee} />
                   <span className="assign__name">{employee.name}</span>
                   {planned ? (
-                    <span className="assign__status">już w planie</span>
+                    <span className="assign__status">już w planie — kolejne zadanie dodasz na osi</span>
                   ) : where ? (
                     <span className="assign__status assign__status--busy">
                       <ProjectDot color={where.color} />

@@ -1,23 +1,27 @@
 import { useMemo, useState } from "react";
-import { CalendarOff, ChevronLeft, ChevronRight, Lock, Minus, Plus, Send } from "lucide-react";
+import { CalendarOff, ChevronLeft, ChevronRight, History, Lock, Send } from "lucide-react";
 import { useData, useModel, useUser } from "../../app/DataContext";
+import { useNow } from "../../app/hooks";
 import { DatePicker } from "../../components/DatePicker";
 import { DayCell } from "../../components/DayCell";
 import { Dialog } from "../../components/Dialog";
 import { Field } from "../../components/Field";
 import { ProjectDot } from "../../components/PersonBadge";
-import { ABSENCE_LABEL, dayStateOf, formatDuration, statusLabel, workedMinutes } from "../../domain/labels";
-import { editDeadline, workerCanEdit } from "../../domain/workflow";
-import type { AbsenceType, DayEntry, Project } from "../../domain/types";
-import { addDays, eachDay, formatDay, formatMinutes, isoWeek, startOfWeek, todayISO, weekdayIndex, type ISODate } from "../../lib/dates";
+import { BreakChoice, TimeStepper } from "../../components/TimeStepper";
+import { ABSENCE_LABEL, formatDuration, workedMinutes } from "../../domain/labels";
+import { approvalNote, approveByDay, dayView, editRight, statusText } from "../../domain/workflow";
+import type { AbsenceType, DayEntry, DayState, Project } from "../../domain/types";
+import { addDays, eachDay, formatDay, formatMinutes, formatTimestamp, isoWeek, startOfWeek, todayISO, weekdayIndex, type ISODate } from "../../lib/dates";
 import { cityOf } from "../../lib/search";
 
-const BREAKS = [0, 15, 30, 45, 60];
-
-/** Ekran pracownika (i Team Leadera): wpis dnia w kilku dotknięciach, tydzień w kolorach, nieobecność. */
+/**
+ * Ekran pracownika (i Team Leadera): wpis dnia w kilku dotknięciach, tydzień w kolorach, nieobecność.
+ * Dzień można poprawiać, dopóki nikt go nie zatwierdził. W przerwie (brak zadania) nie ma wpisu godzin.
+ */
 export function MyHoursView() {
   const model = useModel();
   const user = useUser();
+  const now = useNow();
   const today = todayISO();
   const [date, setDate] = useState<ISODate>(today);
   const [absence, setAbsence] = useState(false);
@@ -30,9 +34,9 @@ export function MyHoursView() {
     if (a) return model.projectById.get(a.projectId) ?? null;
     return model.projects.find((p) => p.supervisorId === user.id && p.startDate <= d) ?? null;
   };
-  const project = projectFor(date);
   const record = mine.get(date);
   const entry = record?.entry;
+  const project = record ? model.projectById.get(record.projectId) ?? null : projectFor(date);
   const weekMinutes = days.reduce((s, d) => s + workedMinutes(mine.get(d)?.entry), 0);
 
   return (
@@ -49,12 +53,14 @@ export function MyHoursView() {
             </div>
           </>
         ) : (
-          <p>Nie masz projektu na ten dzień. Zapytaj supervisora albo Planning.</p>
+          <p>
+            <strong>Przerwa.</strong> W tym dniu nie masz zadania w projekcie, więc nie wpisujesz godzin.
+          </p>
         )}
       </section>
 
       <DayEditor
-        key={`${date}-${entry?.status ?? "none"}-${entry?.start ?? ""}-${entry?.end ?? ""}`}
+        key={`${date}-${entry?.status ?? "none"}-${entry?.start ?? ""}-${entry?.end ?? ""}-${entry?.kind ?? ""}`}
         date={date}
         today={today}
         entry={entry}
@@ -89,6 +95,8 @@ export function MyHoursView() {
           {days.map((d) => {
             const e = mine.get(d)?.entry;
             const future = d > today;
+            const v = dayView(e, d, now);
+            const onBreak = !e && !projectFor(d);
             return (
               <li key={d}>
                 <button
@@ -97,10 +105,12 @@ export function MyHoursView() {
                   onClick={() => setDate(d)}
                   disabled={future}
                 >
-                  <DayCell state={dayStateOf(e)} size="map" sent={e?.exported} today={d === today} label={statusLabel(e)} />
+                  <DayCell state={v.state} size="map" sent={v.sent} today={d === today} label={statusText(e, d, now)} />
                   <span className="wday__date">{formatDay(d)}</span>
                   <span className="wday__hours">{describe(e)}</span>
-                  <span className={`wday__status ${e?.status === "REJECTED" ? "is-rejected" : ""}`}>{e ? short(e) : future ? "" : "brak wpisu"}</span>
+                  <span className={`wday__status ${v.state === "missed" ? "is-missed" : ""}`}>
+                    {e ? short(v.state, v.sent) : future ? "" : onBreak ? "przerwa" : "brak wpisu"}
+                  </span>
                 </button>
               </li>
             );
@@ -115,30 +125,30 @@ export function MyHoursView() {
 
 function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISODate; entry: DayEntry | undefined; project: Project | null }) {
   const data = useData();
+  const model = useModel();
   const user = useUser();
+  const now = useNow();
   const [start, setStart] = useState(entry?.start ?? 420);
   const [end, setEnd] = useState(entry?.end ?? 1020);
   const [breakMin, setBreakMin] = useState(entry?.breakMin ?? 30);
   const [saving, setSaving] = useState(false);
-  const editable = Boolean(project) && workerCanEdit(date, entry, today) && entry?.kind !== "ABSENCE";
+  const right = project ? editRight(model, user, project.id, user.id, date, entry, now) : null;
+  const editable = Boolean(right?.can) && entry?.kind !== "ABSENCE";
   const worked = Math.max(0, end - start - breakMin);
-  const deadline = editDeadline(startOfWeek(date));
+  const unchanged = entry?.kind === "WORK" && entry.start === start && entry.end === end && (entry.breakMin ?? 0) === breakMin;
+  const v = dayView(entry, date, now);
+  const changes = (entry?.history ?? []).filter((h) => h.byId !== user.id);
+  const lockText = entry && !editable ? right?.reason ?? approvalNote(model, user.id, date, entry, now).split("\n")[0] : null;
 
   return (
-    <section className={`worker__day ${entry ? `is-${dayStateOf(entry)}` : ""}`} aria-label="Wybrany dzień">
+    <section className={`worker__day ${entry ? `is-${v.state}` : ""}`} aria-label="Wybrany dzień">
       <header className="worker__day-head">
         <h2>
           {formatDay(date)}
           {date === today && <span>, dziś</span>}
         </h2>
-        {entry && <span className={`badge ${badgeClass(entry)}`}>{statusLabel(entry)}</span>}
+        {entry && <span className={`badge ${badgeClass(v.state)}`}>{statusText(entry, date, now)}</span>}
       </header>
-
-      {entry?.status === "REJECTED" && (
-        <p className="worker__reject">
-          Odrzucone: <strong>{entry.rejectionReason ?? "bez powodu"}</strong>. Popraw godziny i wyślij ponownie.
-        </p>
-      )}
 
       {entry?.kind === "ABSENCE" ? (
         <p className="worker__absent">Nieobecność: {ABSENCE_LABEL[entry.absence ?? "OTHER"].toLowerCase()}</p>
@@ -151,23 +161,14 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
             </span>
             <TimeStepper label="Koniec" value={end} onChange={setEnd} />
           </div>
-          <div className="break-choice" role="radiogroup" aria-label="Przerwa">
-            <span className="break-choice__label">Przerwa (minuty)</span>
-            <div className="break-choice__options">
-              {BREAKS.map((b) => (
-                <button key={b} type="button" role="radio" aria-checked={breakMin === b} className={breakMin === b ? "is-selected" : ""} onClick={() => setBreakMin(b)}>
-                  {b}
-                </button>
-              ))}
-            </div>
-          </div>
+          <BreakChoice value={breakMin} onChange={setBreakMin} />
           <p className="worker__total">
             Czas pracy: <strong>{formatDuration(worked)}</strong>
           </p>
           <button
             type="button"
             className="btn btn--primary btn--xl btn--block"
-            disabled={saving || worked <= 0}
+            disabled={saving || worked <= 0 || unchanged}
             onClick={async () => {
               setSaving(true);
               await data.submitHours({ projectId: project!.id, employeeId: user.id, date, start, end, breakMin });
@@ -175,9 +176,11 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
             }}
           >
             <Send size={20} aria-hidden />
-            {entry ? "Wyślij poprawione godziny" : "Wyślij do zatwierdzenia"}
+            {!entry ? "Wyślij do zatwierdzenia" : unchanged ? "Wysłane — czeka na supervisora" : "Wyślij poprawione godziny"}
           </button>
-          <p className="worker__hint">Możesz poprawiać do {formatDay(deadline)}, dopóki supervisor nie zatwierdzi.</p>
+          <p className="worker__hint">
+            Możesz poprawiać, dopóki supervisor nie zatwierdzi — najpóźniej do {formatDay(approveByDay(startOfWeek(date)))}, 23:59.
+          </p>
         </>
       ) : entry ? (
         <div className="worker__readonly">
@@ -187,36 +190,38 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
           <p className="worker__total">
             Przerwa {entry.breakMin ?? 0} min, czas pracy <strong>{formatDuration(workedMinutes(entry))}</strong>
           </p>
-          <p className="worker__hint">
-            <Lock size={14} aria-hidden /> Zatwierdzone godziny nie mogą być zmienione.
-          </p>
         </div>
-      ) : (
-        <p className="worker__hint">
-          <Lock size={14} aria-hidden /> {project ? "Termin na wpis tego dnia minął. Napisz do supervisora." : "Brak projektu na ten dzień."}
+      ) : null}
+
+      {lockText && (
+        <p className={`worker__hint ${v.state === "missed" ? "worker__hint--missed" : ""}`}>
+          <Lock size={14} aria-hidden /> {lockText}
         </p>
       )}
-    </section>
-  );
-}
+      {!entry && !editable && (
+        <p className="worker__hint">
+          <Lock size={14} aria-hidden /> {project ? right?.reason ?? "Tego dnia nie można już wpisać." : "Przerwa — bez zadania w projekcie."}
+        </p>
+      )}
 
-function TimeStepper({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  const set = (v: number) => onChange(Math.min(24 * 60 - 15, Math.max(0, v)));
-  return (
-    <div className="stepper" role="group" aria-label={label}>
-      <span className="stepper__label">{label}</span>
-      <span className="stepper__value" aria-live="polite">
-        {formatMinutes(value)}
-      </span>
-      <div className="stepper__buttons">
-        <button type="button" onClick={() => set(value - 15)} aria-label={`${label}: 15 minut wcześniej`}>
-          <Minus size={20} />
-        </button>
-        <button type="button" onClick={() => set(value + 15)} aria-label={`${label}: 15 minut później`}>
-          <Plus size={20} />
-        </button>
-      </div>
-    </div>
+      {changes.length > 0 && (
+        <div className="worker__changes">
+          <h3>
+            <History size={14} aria-hidden /> Zmiany od supervisora
+          </h3>
+          <ul>
+            {changes.map((h, i) => (
+              <li key={`${h.at}-${i}`}>
+                <span>
+                  {h.byName} · {formatTimestamp(h.at)}
+                </span>
+                {h.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -232,7 +237,7 @@ function AbsenceDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog
       title="Zgłoś nieobecność"
-      description="Supervisor zatwierdzi ją razem z godzinami. Weekendy są pomijane."
+      description="Supervisor zatwierdzi ją razem z godzinami. Weekendy i dni bez zadania są pomijane."
       onClose={onClose}
       footer={
         <>
@@ -288,15 +293,17 @@ function describe(e: DayEntry | undefined) {
   return `${formatMinutes(e.start ?? 0)}–${formatMinutes(e.end ?? 0)}`;
 }
 
-function short(e: DayEntry) {
-  if (e.exported) return "wysłane";
-  if (e.status === "REJECTED") return "do poprawy";
-  if (e.status === "SUBMITTED") return "do zatwierdzenia";
+function short(state: DayState, sent: boolean) {
+  if (sent) return "wysłane";
+  if (state === "missed") return "nie wysłane";
+  if (state === "pending") return "do zatwierdzenia";
+  if (state === "absent") return "nieobecność";
   return "zatwierdzone";
 }
 
-function badgeClass(e: DayEntry) {
-  if (e.status === "REJECTED") return "badge--absent";
-  if (e.status === "SUBMITTED") return "badge--pending";
+function badgeClass(state: DayState) {
+  if (state === "missed") return "badge--missed";
+  if (state === "pending") return "badge--pending";
+  if (state === "absent") return "badge--absent";
   return "badge--approved";
 }

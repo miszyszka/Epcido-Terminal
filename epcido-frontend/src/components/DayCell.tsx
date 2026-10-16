@@ -1,4 +1,4 @@
-import { ABSENCE_SHORT, dayStateOf, describeEntry, statusLabel } from "../domain/labels";
+import { ABSENCE_SHORT } from "../domain/labels";
 import type { DayEntry, DayState } from "../domain/types";
 import { formatMinutes } from "../lib/dates";
 
@@ -11,12 +11,22 @@ export function SentMark({ size = 10 }: { size?: number }) {
   );
 }
 
+/** Wykrzyknik „nie wysłane do Dataverse" (brandbook 2.3). */
+export function MissedMark({ size = 10 }: { size?: number }) {
+  return (
+    <svg className="missed-mark" width={size} height={size} viewBox="0 0 12 12" aria-hidden>
+      <path d="M6 2.4v4.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="6" cy="9.4" r="1.15" fill="currentColor" />
+    </svg>
+  );
+}
+
 interface DayCellProps {
   state: DayState;
   size?: "map" | "mini" | "legend";
   /** Wysłane do Dataverse — zielony ptaszek */
   sent?: boolean;
-  /** Dzień w zaplanowanym okresie pracy, jeszcze bez wpisu (przyszłość) */
+  /** Dzień w zaplanowanym zadaniu, jeszcze bez wpisu (przyszłość) */
   planned?: boolean;
   today?: boolean;
   /** Treść dymka i opisu dla czytników ekranu */
@@ -37,43 +47,47 @@ export function DayCell({ state, size = "map", sent, planned, today, label }: Da
   return (
     <span className={cls} data-tip={label} role="img" aria-label={label}>
       {sent && <SentMark size={size === "mini" ? 8 : 10} />}
+      {state === "missed" && <MissedMark size={size === "mini" ? 8 : 10} />}
     </span>
   );
 }
 
 interface DayCardProps {
   entry: DayEntry | undefined;
-  /** Dzień w okresie pracy bez wpisu — pokazuje „brak wpisu" zamiast pustego pola */
+  state: DayState;
+  sent?: boolean;
+  /** Dzień w zadaniu bez wpisu — pokazuje „brak wpisu" zamiast pustego pola */
   expected?: boolean;
   planned?: boolean;
-  selected?: boolean;
+  /** Po kliknięciu: otwórz edycję dnia */
   onClick?: () => void;
+  /** Dymek: kto i kiedy zatwierdził */
+  tip?: string;
+  /** Opis dla czytników ekranu */
   label?: string;
 }
 
 /**
  * Duża komórka dnia (oś czasu, zatwierdzanie): od–do, przerwa, powód nieobecności.
- * Kolor wypełnienia = stan dnia, ptaszek = wysłane do Dataverse.
+ * Kolor wypełnienia = stan dnia, ptaszek = wysłane do Dataverse, wykrzyknik = nie wysłane,
+ * kropka w rogu = zmienione przez osobę zatwierdzającą (szczegóły w notatce dnia).
  */
-export function DayCard({ entry, expected, planned, selected, onClick, label }: DayCardProps) {
-  const state = dayStateOf(entry);
-  const rejected = entry?.status === "REJECTED";
+export function DayCard({ entry, state, sent, expected, planned, onClick, tip, label }: DayCardProps) {
+  const edited = Boolean(entry?.history?.length);
   const cls = [
     "daycard",
     `daycard--${state}`,
-    rejected ? "daycard--rejected" : "",
     planned && !entry ? "daycard--planned" : "",
-    selected ? "is-selected" : "",
     onClick ? "is-clickable" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
-  let main: string = "";
-  let sub: string = "";
+  let main = "";
+  let sub = "";
   if (entry?.kind === "ABSENCE") {
     main = ABSENCE_SHORT[entry.absence ?? "OTHER"];
-    sub = entry.absence === "SICK" ? "zwolnienie" : entry.absence === "LEAVE" ? "nieobecny" : "nieobecny";
+    sub = entry.absence === "SICK" ? "zwolnienie" : "nieobecny";
   } else if (entry && entry.start != null && entry.end != null) {
     main = `${formatMinutes(entry.start)}–${formatMinutes(entry.end)}`;
     sub = `przerwa ${entry.breakMin ?? 0} min`;
@@ -82,27 +96,32 @@ export function DayCard({ entry, expected, planned, selected, onClick, label }: 
   } else if (expected) {
     sub = "brak wpisu";
   }
-  if (rejected) sub = "do poprawy";
 
   const content = (
     <>
       {main && <b>{main}</b>}
       {sub && <span>{sub}</span>}
-      {entry?.exported && (
+      {sent && (
         <i className="daycard__sent" aria-hidden>
           <SentMark size={9} />
         </i>
       )}
+      {state === "missed" && (
+        <i className="daycard__missed" aria-hidden>
+          <MissedMark size={9} />
+        </i>
+      )}
+      {edited && <i className="daycard__edited" aria-hidden />}
     </>
   );
-  const tip = label ?? (entry ? `${describeEntry(entry)}` : statusLabel(entry));
+  const aria = label ?? tip;
 
   return onClick ? (
-    <button type="button" className={cls} onClick={onClick} aria-pressed={selected} aria-label={tip} data-tip={tip}>
+    <button type="button" className={cls} onClick={onClick} aria-label={aria} data-tip={tip}>
       {content}
     </button>
   ) : (
-    <div className={cls} aria-label={tip}>
+    <div className={cls} aria-label={aria} data-tip={tip}>
       {content}
     </div>
   );

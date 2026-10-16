@@ -1,7 +1,7 @@
 # Epcido Terminal
 
 System planowania projektów i czasu pracy dla Epcido — następca Gantbee.
-Etap: **prototyp 0.3** — planowanie, zatwierdzanie godzin, ekran pracownika (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
+Etap: **prototyp 0.4** — planowanie, obsada, zatwierdzanie godzin, ekran pracownika (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
 
 ## Uruchomienie
 
@@ -32,17 +32,18 @@ Po lewej **panel roboczy** (tylko prototyp): przełączasz osobę i widzisz syst
 | Ekran | Adres | Kto | Co robi |
 |---|---|---|---|
 | Pulpit | `/pulpit` | Installation Manager, Admin | Supervisorzy i ich zaległości w zatwierdzaniu |
-| Zatwierdzanie | `/zatwierdzanie` | Supervisor, IM, Admin | Pozycje i godziny do zatwierdzenia, zatwierdź / odrzuć z powodem |
-| Moje godziny | `/moje-godziny` | Pracownik, TL, Supervisor | Wpis dnia na telefonie, tydzień, nieobecność |
+| Zatwierdzanie | `/zatwierdzanie` | Supervisor, IM, Admin | Czas do terminu i timesheety do zatwierdzenia; zmiana dnia z notatką; po terminie tylko Admin |
+| Moje godziny | `/moje-godziny` | Pracownik, TL, Supervisor | Wpis dnia na telefonie, tydzień, nieobecność, zmiany od supervisora |
 | Mapa | `/mapa` | wszyscy poza pracownikami | Projekty: wiersze = ludzie, kolumny = dni |
-| Oś czasu | `/os-czasu` | jw. | Godziny od–do, przerwa, powód nieobecności |
+| Oś czasu | `/os-czasu` | jw. | Godziny od–do, przerwa, powód nieobecności; kliknięcie dnia otwiera okno dnia |
 | Struktura | `/struktura` | Planning, PM, IM, Admin | IM → projekt i Supervisor → zespół |
 | Ludzie | `/ludzie` | Planning, IM, Admin | Lista osób, przypisywanie do projektów |
+| Obsada | `/obsada` | Planning, Admin | Kto się zwalnia, gdzie brakuje ludzi, kto długo bez przerwy; „Zaplanuj dalej" i „Przerwa" |
 | Brandbook | `/brandbook` | wszyscy | Kolory, krój, komponenty |
 
-„Dodaj nowy projekt" u góry (Admin, Planning, PM) i kliknięcie nazwy projektu otwierają **edytor na pełnym ekranie**: dane projektu, plan zespołu z paskami od–do i historię zmian.
+„Dodaj nowy projekt" u góry (Admin, Planning, PM) i kliknięcie nazwy projektu otwierają **edytor na pełnym ekranie**: dane projektu z zapotrzebowaniem, plan zespołu z zadaniami od–do i przerwami, historię zmian.
 
-Przycisk „Wersja mobilna" pokazuje aplikację w ramce telefonu.
+U góry jest wyszukiwarka z podpowiedziami (projekty, ludzie, ekrany). Przycisk „Wersja mobilna" pokazuje aplikację w ramce telefonu.
 
 ### Kolory i znaki dni (obowiązują w całym systemie)
 
@@ -52,12 +53,14 @@ Przycisk „Wersja mobilna" pokazuje aplikację w ramce telefonu.
 | Golden Hour `#F4B13B` | Do zatwierdzenia |
 | Terracotta Clay `#E0745E` | Nieobecny |
 | Biały / piaskowy w weekend | Wolne lub brak wpisu |
+| Szary, kreskowany, wykrzyknik | Nie wysłane do Dataverse — nie zatwierdzone do pn 23:59; zatwierdza tylko Admin |
 | Zielony ptaszek | Wysłane do Dataverse |
-| Przerywana kreska pn \| wt | Koniec edycji godzin poprzedniego tygodnia |
+| Przerywana kreska pn \| wt | Termin zatwierdzenia poprzedniego tygodnia (pn 23:59) |
+| Kreskowane pole między zadaniami | Przerwa (bez zadania, bez wpisu godzin) |
 
 ### Dane testowe
 
-Administrator, Planista, 3 Project Managerów, 4 Installation Managerów, 10 Supervisorów, 20 Team Leaderów, 50 elektryków, 50 mechaników, 10 projektów, okresy pracy od–do i godziny z ostatnich 10 tygodni. Generator: `src/data/seed.ts` (deterministyczny). Jeśli w Firebase są dane z wersji 0.2, aplikacja zaproponuje ich wymianę.
+Administrator, Planista, 3 Project Managerów, 4 Installation Managerów, 10 Supervisorów, 20 Team Leaderów, 50 elektryków, 50 mechaników, 10 projektów z zapotrzebowaniem, zadania od–do (część z przerwami na wyjazd), godziny z ostatnich 10 tygodni z osobami i godzinami zatwierdzeń, kilka dni nie wysłanych i kilka zmian od supervisorów. Generator: `src/data/seed.ts` (deterministyczny). Jeśli w Firebase są dane ze starszej wersji, aplikacja zaproponuje ich wymianę.
 
 ## Struktura kodu
 
@@ -66,9 +69,11 @@ src/
   app/          DataContext (dane + akcje), UiContext (wyszukiwanie, panel, komunikaty)
   data/         repository.ts (granica z bazą), commands.ts (zmiany + dziennik),
                 firestoreRepo.ts, memoryRepo.ts (demo), seed.ts
-  domain/       typy, etykiety, permissions.ts (role), workflow.ts (terminy, kolejki)
+  domain/       typy, etykiety, permissions.ts (role), workflow.ts (terminy, kolejki, prawa do zmian),
+                staffing.ts (obsada, przerwy, braki)
   components/   kropka dnia, dock, panel, kalendarz, pola formularza…
-  features/     approvals, dashboard, worker, map, timeline, grid, project, structure, people, brandbook
+  features/     approvals, dashboard, hours (okno dnia), worker, map, timeline, grid, project, staffing,
+                structure, people, brandbook
   styles/       tokens.css (źródło prawdy designu), base, components, views
 docs/
   BRANDBOOK.md  zasady designu dla wszystkich modułów

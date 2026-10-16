@@ -1,34 +1,35 @@
 // Liczby zbiorcze projektu do nagłówków kart.
 
 import type { Model } from "../app/DataContext";
-import { workedMinutes } from "./labels";
 import type { ISODate } from "../lib/dates";
+import { countTimesheets, isFinal, isLocked, isSent } from "./workflow";
 
 export interface ProjectStats {
-  /** Wpisy czekające na zatwierdzenie (na dowolnym poziomie) */
+  /** Timesheety czekające na zatwierdzenie (na dowolnym poziomie, przed terminem) */
   pending: number;
-  pendingMinutes: number;
-  rejected: number;
+  /** Timesheety nie zatwierdzone na czas — nie wysłane do Dataverse */
+  missed: number;
   absences: number;
   /** Ostatni dzień wysłany do Dataverse */
   lastSent: ISODate | null;
 }
 
-export function projectStats(model: Model, projectId: string, from?: ISODate, to?: ISODate): ProjectStats {
-  const s: ProjectStats = { pending: 0, pendingMinutes: 0, rejected: 0, absences: 0, lastSent: null };
-  for (const [, days] of model.entries.get(projectId) ?? []) {
+export function projectStats(model: Model, projectId: string, now: Date, from?: ISODate, to?: ISODate): ProjectStats {
+  const pending: { projectId: string; employeeId: string; date: ISODate }[] = [];
+  const missed: typeof pending = [];
+  let absences = 0;
+  let lastSent: ISODate | null = null;
+  for (const [employeeId, days] of model.entries.get(projectId) ?? []) {
     for (const [date, entry] of days) {
-      if (entry.exported) {
-        if (!s.lastSent || date > s.lastSent) s.lastSent = date;
+      if (entry.kind === "ABSENCE" && (!from || date >= from) && (!to || date <= to)) absences++;
+      if (isSent(date, entry, now)) {
+        if (!lastSent || date > lastSent) lastSent = date;
         continue;
       }
-      if (entry.status === "REJECTED") s.rejected++;
-      else if (entry.status === "SUBMITTED" || entry.status === "SUPERVISOR_APPROVED") {
-        s.pending++;
-        s.pendingMinutes += workedMinutes(entry);
-      }
-      if (entry.kind === "ABSENCE" && (!from || date >= from) && (!to || date <= to)) s.absences++;
+      if (isFinal(entry)) continue;
+      if (isLocked(date, entry, now)) missed.push({ projectId, employeeId, date });
+      else pending.push({ projectId, employeeId, date });
     }
   }
-  return s;
+  return { pending: countTimesheets(pending), missed: countTimesheets(missed), absences, lastSent };
 }

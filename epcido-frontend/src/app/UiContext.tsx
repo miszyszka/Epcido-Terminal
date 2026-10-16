@@ -4,6 +4,9 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 export type EditorState = { projectId: string | null; tab: EditorTab; rev: number } | null;
 export type EditorTab = "team" | "history";
 
+/** Dzień otwarty do podglądu lub zmiany (oś czasu, zatwierdzanie). */
+export type EntryRef = { projectId: string; employeeId: string; date: string } | null;
+
 export interface Toast {
   id: number;
   message: string;
@@ -17,6 +20,9 @@ interface UiValue {
   openNewProject: () => void;
   openProject: (projectId: string, tab?: EditorTab) => void;
   closeEditor: () => void;
+  entryEditor: EntryRef;
+  openEntry: (ref: NonNullable<EntryRef>) => void;
+  closeEntry: () => void;
   toasts: Toast[];
   toast: (message: string, tone?: Toast["tone"]) => void;
 }
@@ -26,6 +32,7 @@ const UiContext = createContext<UiValue | null>(null);
 export function UiProvider({ children }: { children: ReactNode }) {
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<EditorState>(null);
+  const [entryEditor, setEntryEditor] = useState<EntryRef>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
 
@@ -41,10 +48,12 @@ export function UiProvider({ children }: { children: ReactNode }) {
     []
   );
   const closeEditor = useCallback(() => setEditor(null), []);
+  const openEntry = useCallback((ref: NonNullable<EntryRef>) => setEntryEditor(ref), []);
+  const closeEntry = useCallback(() => setEntryEditor(null), []);
 
   const value = useMemo<UiValue>(
-    () => ({ search, setSearch, editor, openNewProject, openProject, closeEditor, toasts, toast }),
-    [search, editor, openNewProject, openProject, closeEditor, toasts, toast]
+    () => ({ search, setSearch, editor, openNewProject, openProject, closeEditor, entryEditor, openEntry, closeEntry, toasts, toast }),
+    [search, editor, openNewProject, openProject, closeEditor, entryEditor, openEntry, closeEntry, toasts, toast]
   );
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;

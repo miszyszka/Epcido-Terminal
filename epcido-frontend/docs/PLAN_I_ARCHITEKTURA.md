@@ -85,7 +85,7 @@ Zbudować od zera nowoczesny, bezpieczny i tani w utrzymaniu system, który:
 - Reguły prawne per kraj i alerty limitów (Z8) — model danych je przewiduje (kraj pracy per wpis), logika później.
 - Logistyka/Travel, Tools, HSE (poza ogłoszeniami), Recruitment, Tender, Finance (poza eksportem godzin).
 - Dostęp dla partnerów zewnętrznych.
-- RCP sprzętowe (bramki, czytniki). Skan QR/kodu kreskowego na budowie to opcja na później.
+- RCP sprzętowe (bramki, czytniki). Skan QR/kodu kreskowego w projekcie to opcja na później.
 - Planowanie budżetu rocznego i forecast 12 tygodni.
 
 ---
@@ -96,7 +96,7 @@ Zbudować od zera nowoczesny, bezpieczny i tani w utrzymaniu system, który:
 |---|---|---|---|
 | **Pracownik (site)** | ~420 | PWA (telefon) | Okrojony panel: wpis dziennych godzin w swoich projektach, swoja historia, tablica ogłoszeń, wiadomości. |
 | **Team Leader (TL)** | ~30 łącznie z SV | PWA + desktop | Wszystko w projektach, do których jest przypisany. Akceptacja / odrzucenie / korekta godzin. |
-| **Supervisor (SV)** | (w puli ~30) | PWA + desktop | Jak TL + budowa zespołu, zarządzanie TL. |
+| **Supervisor (SV)** | (w puli ~30) | PWA + desktop | Jak TL + skład zespołu, zarządzanie TL. |
 | **Biuro: PM / Planning / PMO** | ~50 | Desktop | Projekty, przypisania, widok tygodniowy, skill matrix, koszty, raporty. |
 | **Administrator** | 1–3 | Desktop | Użytkownicy, role, słowniki, integracja, podgląd audytu. |
 
@@ -187,7 +187,7 @@ stateDiagram-v2
 **Modularny monolit** w jednym repozytorium (TypeScript end-to-end), z wyraźnymi granicami modułów. Dla 3-osobowego zespołu i ~500 użytkowników mikroserwisy byłyby tylko kosztem. Granice modułów pozwolą później wydzielić np. komunikator do osobnej usługi, jeśli zajdzie potrzeba.
 
 ### 6.2 Dlaczego nie Power Apps
-Jesteśmy w ekosystemie Power Platform, więc naturalnym pytaniem jest budowa w Power Apps. Rekomendacja: **nie**, z powodów:
+Jesteśmy w ekosystemie Power Platform, więc naturalnym pytaniem jest stworzenie systemu w Power Apps. Rekomendacja: **nie**, z powodów:
 - **Licencje per użytkownik** dla ~500 osób byłyby dominującym kosztem (sprzeczne z Z4). Do weryfikacji z nav24 aktualnego cennika i ewentualnych licencji, które już macie.
 - Ograniczona kontrola nad UI/UX — a ten ma być dokładnie dopracowany.
 - Funkcje „social” (wątki, reakcje, zdjęcia, real-time) są w Power Apps trudne i drogie.
@@ -285,7 +285,7 @@ Kryteria wyboru: **bezpieczeństwo, niski koszt, mały zespół, jeden język, d
 | Real-time (social) | **Server-Sent Events / WebSocket** + Postgres LISTEN/NOTIFY | Wystarczy dla ~500 użytkowników, bez dodatkowej infrastruktury. | Azure Web PubSub (później) |
 | Pliki | **Azure Blob Storage** (prywatny kontener, SAS) | Tanio, szyfrowane, dostęp czasowy. | S3-kompatybilne |
 | Obrazy | **sharp** (resize, usuwanie EXIF/GPS) | Mniejsze pliki, ochrona prywatności. | — |
-| Auth | Własny moduł: **Argon2id**, sesje w httpOnly cookies, **TOTP MFA**, później **passkeys (WebAuthn)**; SSO **Microsoft Entra ID** dla biura (opcjonalnie) | Pracownicy budowlani zwykle nie mają kont M365 → własne logowanie; biuro może logować się kontem firmowym. | Zewnętrzny IdP (Entra External ID, Keycloak) |
+| Auth | Własny moduł: **Argon2id**, sesje w httpOnly cookies, **TOTP MFA**, później **passkeys (WebAuthn)**; SSO **Microsoft Entra ID** dla biura (opcjonalnie) | Pracownicy montażowi zwykle nie mają kont M365 → własne logowanie; biuro może logować się kontem firmowym. | Zewnętrzny IdP (Entra External ID, Keycloak) |
 | Dataverse | **Dataverse Web API (OData v4)** + `@azure/msal-node` (client credentials, certyfikat) | Oficjalna, bezpośrednia ścieżka. | Power Automate jako pośrednik |
 | Hosting | **Azure, region Poland Central** (lub West Europe): Container Apps + PostgreSQL Flexible Server + Blob + Key Vault | Dane w UE/PL, ekosystem Microsoft (Entra ID, Dataverse), usługi zarządzane = mniej pracy z bezpieczeństwem. Container Apps skalują się do niskiego kosztu przy małym ruchu. | Tańszy VPS w UE — więcej własnej odpowiedzialności za bezpieczeństwo i backup. |
 | IaC | **Bicep** lub **Terraform** | Infrastruktura opisana w repo = udokumentowana i powtarzalna. | — |
@@ -525,7 +525,7 @@ Bez sztywnych dat, dopóki nie znamy dostępności zespołu i odpowiedzi nav24. 
 | Brak dostępu do danych Gantbee (migracja) | Wysoki | Ustalić z nav24, co z historii jest już w Dataverse; wtedy migrujemy z Dataverse, nie z Gantbee. |
 | Mały zespół, praca obok innych obowiązków | Wysoki | Ścisły zakres MVP, automatyzacja (CI, testy), modularny monolit, unikanie „nice-to-have”. |
 | Błędy w eksporcie godzin (wynagrodzenia!) | Krytyczny | Idempotencja, sumy kontrolne, testy integracyjne, pilot równoległy, raport eksportu dla HR. |
-| Niska adopcja PWA przez pracowników | Średni | UX mobile-first, wielojęzyczność, testy z TL na budowie, instrukcja wideo. |
+| Niska adopcja PWA przez pracowników | Średni | UX mobile-first, wielojęzyczność, testy z TL w projekcie, instrukcja wideo. |
 | Moduł social: treści nieodpowiednie, dane osobowe | Średni | Moderacja, regulamin, DPIA, usuwanie EXIF, retencja. |
 | Brak sponsora/akceptującego w zarządzie | Średni | Wcześnie pokazywać postępy; prezentacja z danymi z pilota. |
 | Zależność od nav24 | Średni | Jasny podział odpowiedzialności, kontrakt na piśmie, tabela staging. |
@@ -561,7 +561,7 @@ Bez sztywnych dat, dopóki nie znamy dostępności zespołu i odpowiedzi nav24. 
 
 | Pojęcie | Znaczenie |
 |---|---|
-| **SV** | Supervisor — kierownik na budowie/projekcie. |
+| **SV** | Supervisor — kierownik w projekcie. |
 | **TL** | Team Leader — lider zespołu pod SV. |
 | **PO** | Purchase Order — zamówienie klienta; godziny mogą być dzielone na kilka PO. |
 | **Dataverse** | Baza danych Microsoft Power Platform, administrowana przez nav24; punkt integracji z BC i Enovą. |

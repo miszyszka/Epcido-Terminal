@@ -5,7 +5,7 @@ import { useUi } from "../../app/UiContext";
 import { ProjectDot } from "../../components/PersonBadge";
 import { Segmented } from "../../components/Segmented";
 import { validateProject, type DraftAssignment } from "../../data/commands";
-import { PROJECT_STATUS_LABEL } from "../../domain/labels";
+import { defaultTask, PROJECT_STATUS_LABEL } from "../../domain/labels";
 import { can, canEditProject } from "../../domain/permissions";
 import type { ProjectInput } from "../../domain/types";
 import { newId } from "../../lib/random";
@@ -39,6 +39,7 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
       employeeId: a.employeeId,
       from: a.from,
       to: a.to,
+      task: a.task ?? null,
     }))
   );
   const [tab, setTab] = useState<"team" | "history">(initialTab);
@@ -63,7 +64,7 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
       existing.length !== draft.length ||
       draft.some((d) => {
         const a = existing.find((x) => x.id === d.id);
-        return !a || a.from !== d.from || (a.to ?? null) !== (d.to ?? null);
+        return !a || a.from !== d.from || (a.to ?? null) !== (d.to ?? null) || (a.task ?? null) !== (d.task ?? null);
       });
     return fieldsChanged || teamChanged;
   }, [project, values, draft, model.assignmentsByProject]);
@@ -147,7 +148,7 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
               value={tab}
               onChange={setTab}
               options={[
-                { value: "team", label: "Plan zespołu", count: draft.length },
+                { value: "team", label: "Plan zespołu", count: new Set(draft.map((d) => d.employeeId)).size },
                 ...(project ? [{ value: "history" as const, label: "Historia zmian" }] : []),
               ]}
             />
@@ -176,8 +177,17 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
           projectEnd={values.endDate}
           alreadyPlanned={new Set(draft.map((d) => d.employeeId))}
           onClose={() => setAssigning(false)}
-          onAssign={(ids, from, to) => {
-            setDraft((d) => [...d, ...ids.map((employeeId) => ({ key: newId("draft"), employeeId, from, to }))]);
+          onAssign={(ids, from, to, task) => {
+            setDraft((d) => [
+              ...d,
+              ...ids.map((employeeId) => ({
+                key: newId("draft"),
+                employeeId,
+                from,
+                to,
+                task: task || defaultTask(model.employeeById.get(employeeId)?.trade),
+              })),
+            ]);
             setAssigning(false);
           }}
         />

@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AbsenceType, Assignment, DayEntry, Employee, Project, ProjectInput } from "../domain/types";
 import type { QueueItem } from "../domain/workflow";
+import type { EntryInput } from "../data/commands";
+import type { QueueLevel } from "../domain/workflow";
 import type { ChangeSet, RepoError, Repository, Snapshot } from "../data/repository";
 import * as commands from "../data/commands";
 import { CommandError, type Actor, type DraftAssignment } from "../data/commands";
@@ -68,7 +70,16 @@ interface DataValue {
   submitHours: (args: { projectId: string; employeeId: string; date: ISODate; start: number; end: number; breakMin: number }) => Promise<boolean>;
   reportAbsence: (args: { employeeId: string; from: ISODate; to: ISODate; type: AbsenceType; note?: string }) => Promise<boolean>;
   approve: (items: QueueItem[]) => Promise<boolean>;
-  reject: (items: QueueItem[], reason: string) => Promise<boolean>;
+  editEntry: (args: {
+    projectId: string;
+    employeeId: string;
+    date: ISODate;
+    input: EntryInput;
+    comment?: string;
+    approveLevel?: QueueLevel | null;
+  }) => Promise<boolean>;
+  planAssignment: (args: { employeeId: string; projectId: string; from: ISODate; to: ISODate | null; task: string; breakDays?: number }) => Promise<boolean>;
+  insertBreak: (args: { assignmentId: string; from: ISODate; days: number }) => Promise<boolean>;
   loadTestData: () => Promise<boolean>;
   clearData: () => Promise<boolean>;
 }
@@ -191,9 +202,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         commit((s, a) => commands.assignToProject(s, a, employeeId, projectId, todayISO()), "Przypisano do projektu"),
       submitHours: (args) => commit((s, a) => commands.submitHours(s, a, args), "Godziny wysłane do zatwierdzenia"),
       reportAbsence: (args) => commit((s, a) => commands.reportAbsence(s, a, args), "Nieobecność zgłoszona"),
-      approve: (items) =>
-        commit((s, a) => commands.approve(s, a, items), items.length === 1 ? "Zatwierdzono" : `Zatwierdzono: ${items.length} poz.`),
-      reject: (items, reason) => commit((s, a) => commands.reject(s, a, items, reason), "Odrzucono, pracownik zobaczy powód"),
+      approve: (items) => commit((s, a) => commands.approve(s, a, items), "Zatwierdzono"),
+      editEntry: (args) =>
+        commit((s, a) => commands.editEntry(s, a, args), args.approveLevel ? "Zapisano i zatwierdzono" : "Zmiana zapisana w notatce dnia"),
+      planAssignment: (args) => commit((s, a) => commands.planAssignment(s, a, args), "Zaplanowano"),
+      insertBreak: (args) => commit((s, a) => commands.insertBreak(s, a, args), "Przerwa wstawiona"),
       loadTestData: () => commit((_s, a) => commands.loadTestData(a, todayISO()), "Dane testowe wgrane"),
       async clearData() {
         const ok = await commit((s, a) => commands.clearData(s, a), "Dane testowe usunięte");
@@ -240,7 +253,7 @@ export function buildModel(snapshot: Snapshot): Model {
   // Zgodność wstecz: przypisania z wersji 0.2 miały pole `since` zamiast `from`.
   const assignments = snapshot.assignments.map((a) => {
     const legacy = a as Assignment & { since?: string };
-    return { ...a, from: a.from ?? legacy.since ?? "1970-01-01", to: a.to ?? null };
+    return { ...a, from: a.from ?? legacy.since ?? "1970-01-01", to: a.to ?? null, task: a.task ?? null };
   });
   const employeeById = new Map(employees.map((e) => [e.id, e]));
   const projectById = new Map(projects.map((p) => [p.id, p]));

@@ -8,9 +8,10 @@ const SHORT: Record<DayState, string> = {
   pending: "Do zatwierdzenia",
   absent: "Nieobecny",
   off: "Wolne",
+  missed: "Nie wysłane",
 };
 
-export function Legend({ cutoff = true }: { cutoff?: boolean }) {
+export function Legend() {
   return (
     <ul className="legend" aria-label="Legenda">
       {ORDER.map((s) => (
@@ -23,12 +24,10 @@ export function Legend({ cutoff = true }: { cutoff?: boolean }) {
         <DayCell state="approved" size="legend" sent label="Wysłane do Dataverse" />
         <span>Wysłane do Dataverse</span>
       </li>
-      {cutoff && (
-        <li className="legend__item">
-          <span className="legend__cutoff" aria-hidden />
-          <span>Koniec edycji (poniedziałek)</span>
-        </li>
-      )}
+      <li className="legend__item">
+        <DayCell state="missed" size="legend" label="Nie zatwierdzone do poniedziałku 23:59 — nie wysłane do Dataverse" />
+        <span>Nie wysłane</span>
+      </li>
     </ul>
   );
 }

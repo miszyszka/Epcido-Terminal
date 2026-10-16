@@ -2,6 +2,30 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje: SemVer.
 
+## [0.4.0] - 2026-10-16
+
+### Nowe funkcje
+- **Obsada** — narzędzie tylko dla Planningu (osobny przycisk w docku): projekty w kolejnych tygodniach z obsadą „E 6/8 · M 4/4" i datą końca, ludzie w czasie (paski w kolorach projektów, przerwy), filtry „zwalnia się", „bez przydziału", „długo bez przerwy", „projekty z brakami". Okno „Zaplanuj dalej": przerwa na wyjazd → start → projekt, w którym brakuje tej branży. Okno „Przerwa" dzieli bieżące zadanie.
+- **Zapotrzebowanie projektu** (elektrycy, mechanicy) w danych projektu — z tego Obsada liczy braki.
+- **Zadania w planie zespołu**: kilka zadań na osobę, nazwa zadania, przerwa między zadaniami (w przerwie nie ma wpisu godzin), panel zadania z „Wstaw przerwę" i „Usuń zadanie", nowe zadanie kliknięciem w pusty wiersz. Oś sięga 3 miesiące za najdalsze zadanie i rośnie przy przeciąganiu.
+- **Okno dnia z notatką zmian**: supervisor, Installation Manager i administrator zmieniają godziny, przerwę albo wpisują nieobecność — także w dniach już zatwierdzonych. Każda zmiana zostaje w notatce dnia (kto, kiedy, przed → po, komentarz). „Zapisz i zatwierdź" w jednym kroku.
+- **Stan „nie wysłane do Dataverse"**: od wtorku 00:00 dni poprzedniego tygodnia bez pełnego zatwierdzenia są szare, zakreskowane, z wykrzyknikiem; zatwierdza je już tylko administrator, a idą w najbliższej wysyłce.
+- **Wyszukiwarka u góry** z podpowiedziami na żywo: projekty, ludzie, zatwierdzanie u supervisora, ekrany, „Dodaj nowy projekt".
+
+### Zmiany
+- Zatwierdzanie: zamiast panelu z dużymi liczbami i „Zatwierdź wszystko" — baner „Masz X dni i Y godzin na zatwierdzenie Z timesheetów" (czerwony, gdy została mniej niż doba). Nigdzie nie ma sumy godzin do zatwierdzenia. Zatwierdza się timesheet (wiersz) albo dzień.
+- Dymek na dniu w zatwierdzaniu i na osi czasu pokazuje tylko, kto i kiedy zatwierdził (i zmienił).
+- Usunięto odrzucanie godzin i „do poprawy". Pracownik poprawia dzień, dopóki nikt go nie zatwierdził.
+- Mapa: legenda i nawigacja tygodni oraz nagłówek dni przyklejone u góry przy przewijaniu; z legendy zniknął „Koniec edycji"; doszło „Nie wysłane"; przerwy w zadaniach kreskowane.
+- Dock na wysokość ikon, bez wyszukiwarki.
+- Struktura: wszyscy jedna osoba pod drugą, grupy jedna pod drugą.
+- Tytuły ekranów bez podpisów pod spodem.
+- Nowy krój: Plus Jakarta Sans (kontrast grubości 800 / 300, liczby tabelaryczne) zamiast Archivo.
+- Bardziej zróżnicowane kolory projektów (12 barw z całego koła).
+- Słowo „budowa" zastąpione „projektem".
+- Pulpit IM: timesheety zamiast godzin, kolumna „Nie wysłane", postęp tygodnia w %.
+- Dane testowe v4: zadania z przerwami, zapotrzebowanie i braki, godziny i osoby zatwierdzeń, notatki zmian, dni nie wysłane.
+
 ## [0.3.0] - 2026-10-16
 
 ### Nowe funkcje

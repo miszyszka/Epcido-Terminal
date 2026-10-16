@@ -13,8 +13,10 @@ import { canOpen, homeFor } from "./domain/permissions";
 import { ApprovalsView } from "./features/approvals/ApprovalsView";
 import { BrandbookView } from "./features/brandbook/BrandbookView";
 import { DashboardView } from "./features/dashboard/DashboardView";
+import { EntryDialogHost } from "./features/hours/EntryDialog";
 import { MapView } from "./features/map/MapView";
 import { PeopleView } from "./features/people/PeopleView";
+import { StaffingView } from "./features/staffing/StaffingView";
 import { ProjectEditor } from "./features/project/ProjectEditor";
 import { StructureView } from "./features/structure/StructureView";
 import { TimelineView } from "./features/timeline/TimelineView";
@@ -55,6 +57,7 @@ function Layout() {
         </div>
         <Dock />
         {model && user && <ProjectEditor />}
+        {model && user && <EntryDialogHost />}
         <Toasts />
       </div>
     </div>
@@ -113,6 +116,7 @@ function Guarded() {
       <Route path="/os-czasu" element={<TimelineView />} />
       <Route path="/struktura" element={<StructureView />} />
       <Route path="/ludzie" element={<PeopleView />} />
+      <Route path="/obsada" element={<StaffingView />} />
       <Route path="*" element={<Navigate to={homeFor(user)} replace />} />
     </Routes>
   );

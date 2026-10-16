@@ -52,13 +52,13 @@ export function DataGate({ children }: { children: React.ReactNode }) {
   }
 
   const version = data.model.snapshot.seedVersion;
-  if (data.model.snapshot.seeded && version !== null && version < 3) {
+  if (data.model.snapshot.seeded && version !== null && version < 4) {
     return (
       <section className="gate">
         <h2>Dane testowe są ze starszej wersji</h2>
         <p>
-          Nowa wersja ma okresy pracy od–do, wysyłkę do Dataverse i Project Managerów. Usuń stare dane testowe i wgraj
-          nowe — dziennik zmian zostanie.
+          Nowa wersja ma zadania z przerwami, zapotrzebowanie projektów, terminy „nie wysłane do Dataverse" i notatki
+          zmian w godzinach. Usuń stare dane testowe i wgraj nowe — dziennik zmian zostanie.
         </p>
         <div className="gate__actions">
           <button

@@ -1,5 +1,5 @@
 // Model domenowy — zgodny z PLAN_I_ARCHITEKTURA.md (sekcje 3 i 9).
-// Rola dostępu (co ktoś może w systemie) jest rozdzielona od stanowiska (kim jest na budowie).
+// Rola dostępu (co ktoś może w systemie) jest rozdzielona od stanowiska (kim jest w projekcie).
 
 import type { ISODate } from "../lib/dates";
 
@@ -54,6 +54,9 @@ export interface Project {
   projectManagerId: string | null;
   installationManagerId: string | null;
   supervisorId: string | null;
+  /** Zapotrzebowanie (liczba osób danej branży, razem z Team Leaderami). Wpisuje PM, korzysta Planning w Obsadzie. */
+  needElectricians?: number | null;
+  needMechanics?: number | null;
   /** Pola integracyjne — zmiana wpływa na połączenie z Business Central */
   dataverseId: string;
   dataverseNumber: string;
@@ -64,8 +67,9 @@ export interface Project {
 export type ProjectInput = Omit<Project, "id" | "createdAt" | "updatedAt">;
 
 /**
- * Przypisanie osoby (TL, elektryk, mechanik) do projektu na okres od–do.
- * Ta sama osoba może mieć kolejne przypisania w różnych projektach.
+ * Zadanie osoby (TL, elektryk, mechanik) w projekcie na okres od–do — kafelek na planie zespołu.
+ * Osoba może mieć kilka zadań w jednym projekcie; przerwa między nimi = brak zadania = brak wpisu godzin.
+ * Ta sama osoba może mieć kolejne zadania w różnych projektach.
  * Supervisor, IM i PM są wskazani w samym projekcie.
  */
 export interface Assignment {
@@ -75,11 +79,21 @@ export interface Assignment {
   from: ISODate;
   /** null = do końca projektu */
   to: ISODate | null;
+  /** Nazwa zadania, np. „Prace elektryczne" (w Gantbee: taskname) */
+  task?: string | null;
 }
 
-export type EntryStatus = "SUBMITTED" | "SUPERVISOR_APPROVED" | "PM_APPROVED" | "REJECTED";
+export type EntryStatus = "SUBMITTED" | "SUPERVISOR_APPROVED" | "PM_APPROVED";
 export type EntryKind = "WORK" | "ABSENCE";
 export type AbsenceType = "SICK" | "LEAVE" | "OTHER";
+
+/** Ślad zmiany wpisu: kto, kiedy, co zmienił. Tylko dopisywanie. */
+export interface EntryChange {
+  at: string;
+  byId: string;
+  byName: string;
+  text: string;
+}
 
 /** Jeden dzień jednej osoby. Godziny w minutach od północy — jak w API Gantbee. */
 export interface DayEntry {
@@ -91,7 +105,6 @@ export interface DayEntry {
   absence?: AbsenceType | null;
   note?: string | null;
   submittedAt?: string | null;
-  rejectionReason?: string | null;
   svApprovedBy?: string | null;
   svApprovedAt?: string | null;
   finalApprovedBy?: string | null;
@@ -99,6 +112,8 @@ export interface DayEntry {
   /** Wysłane do Dataverse (wtorek 23:00) */
   exported?: boolean;
   exportedAt?: string | null;
+  /** Notatka zmian: poprawki pracownika i zmiany osób zatwierdzających */
+  history?: EntryChange[] | null;
 }
 
 /** Karta tygodnia projektu: id = `${projectId}_${weekStart}` */
@@ -118,7 +133,7 @@ export type AuditAction =
   | "HOURS_SUBMITTED"
   | "ABSENCE_REPORTED"
   | "HOURS_APPROVED"
-  | "HOURS_REJECTED"
+  | "HOURS_EDITED"
   | "TEST_DATA_LOADED"
   | "TEST_DATA_CLEARED";
 
@@ -141,4 +156,12 @@ export interface Dataset {
   timesheets: Timesheet[];
 }
 
-export type DayState = "approved" | "pending" | "absent" | "off";
+/**
+ * Stan dnia na siatkach:
+ *  approved — zatwierdzone przez supervisora (lub dalej),
+ *  pending  — do zatwierdzenia,
+ *  absent   — nieobecny,
+ *  off      — wolne / brak wpisu,
+ *  missed   — nie zatwierdzone do poniedziałku 23:59: nie wysłane do Dataverse, zatwierdza tylko administrator.
+ */
+export type DayState = "approved" | "pending" | "absent" | "off" | "missed";

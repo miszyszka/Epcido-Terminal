@@ -1,6 +1,6 @@
 # Epcido Terminal — brandbook interfejsu
 
-> Wersja 1.1 · obowiązuje dla wszystkich modułów (planowanie, czas pracy, akceptacje, komunikacja, aplikacja mobilna).
+> Wersja 1.2 · obowiązuje dla wszystkich modułów (planowanie, czas pracy, zatwierdzanie, obsada, komunikacja, aplikacja mobilna).
 > Źródło prawdy w kodzie: `src/styles/tokens.css`. Żywy podgląd: ekran **Brandbook** w aplikacji (`/brandbook`).
 > Zmiana tokenu = zmiana w tym pliku + w `tokens.css` w tym samym commicie.
 
@@ -8,14 +8,14 @@
 
 ## 1. Charakter
 
-Epcido montuje instalacje na kilkudziesięciu budowach naraz. Terminal ma działać jak dobrze prowadzona tablica w biurze budowy: wszystko widać od razu, nic nie krzyczy, a kolor oznacza zawsze to samo.
+Epcido montuje instalacje w kilkudziesięciu projektach naraz. Terminal ma działać jak dobrze prowadzona tablica w biurze projektu: wszystko widać od razu, nic nie krzyczy, a kolor oznacza zawsze to samo. W całym interfejsie mówimy **„projekt"** — nigdy „budowa".
 
 Cztery zasady, które rozstrzygają spory projektowe:
 
-1. **Kolor to stan.** Zielony, żółty i czerwony opisują wyłącznie stan dnia pracy. Nigdy nie służą do dekoracji, wyróżnień ani marketingu.
+1. **Kolor to stan.** Zielony, żółty, czerwony i szary-kreskowany opisują wyłącznie stan dnia pracy. Nigdy nie służą do dekoracji, wyróżnień ani marketingu.
 2. **Dzień to kropka.** Jeden dzień jednej osoby to zawsze ten sam obiekt: zaokrąglony kwadrat. Wygląda tak samo na mapie projektów, na osi czasu, w kalendarzu i w aplikacji mobilnej.
-3. **Pływa tylko to, co chwilowe.** Cień dostają tylko elementy tymczasowe: nawigacja, wysuwany panel, kalendarz, komunikat. Treść, która leży na stronie, ma tylko cienką linię.
-4. **Gęstość przez szerokość, nie przez rozmiar.** Gdy trzeba zmieścić dużo nazwisk, zwężamy krój (oś szerokości), a nie zmniejszamy liter.
+3. **Pływa tylko to, co chwilowe.** Cień dostają tylko elementy tymczasowe: nawigacja, okna, kalendarz, podpowiedzi wyszukiwarki, komunikat. Treść, która leży na stronie, ma tylko cienką linię.
+4. **Kontrast grubości.** Tytuły i liczby są grube (700–800), opisy lekkie (300). Hierarchię robimy grubością, a nie dodatkowymi kolorami, wersalikami czy podpisami pod tytułami.
 
 ---
 
@@ -26,9 +26,9 @@ Cztery zasady, które rozstrzygają spory projektowe:
 | Nazwa | Hex | Rola |
 |---|---|---|
 | **Deep Forest** | `#0F3D3A` | Atrament marki: przyciski główne, aktywna nawigacja, dzień zatwierdzony |
-| **Golden Hour** | `#F4B13B` | Zarezerwowany: dzień czeka na zatwierdzenie |
-| **Terracotta Clay** | `#E0745E` | Zarezerwowany: nieobecność (jego ciemny wariant — błędy) |
-| **Warm Sand** | `#F2E6D6` | Ciepłe powierzchnie: weekendy, zaznaczenia, chipy |
+| **Golden Hour** | `#F4B13B` | Zarezerwowany: dzień do zatwierdzenia; baner terminu |
+| **Terracotta Clay** | `#E0745E` | Zarezerwowany: nieobecność; ciemny wariant `#9E4232` — błędy, braki ludzi, pilny termin |
+| **Warm Sand** | `#F2E6D6` | Ciepłe powierzchnie: weekendy, przerwy w zadaniach, narzędzie Obsada w docku |
 
 ### 2.2 Kolory robocze
 
@@ -36,14 +36,15 @@ Cztery zasady, które rozstrzygają spory projektowe:
 |---|---|---|
 | `--ground` | `#EEF2F0` | Tło aplikacji (chłodna szarość z nutą zieleni, nie krem) |
 | `--surface` | `#FFFFFF` | Karty, tabele, panele, pusty dzień |
-| `--surface-2` | `#F6F8F7` | Wiersze grup, pola tylko do odczytu |
+| `--surface-2` | `#F6F8F7` | Wiersze grup, notatka dnia, pola tylko do odczytu |
 | `--ink` | `#102826` | Tekst podstawowy |
 | `--ink-2` | `#4F605D` | Tekst pomocniczy (kontrast 6.6:1 na białym) |
 | `--ink-3` | `#8A9895` | Tylko elementy nieistotne: placeholdery, ikony nieaktywne |
 | `--line` | `#DCE3E0` | Obrysy pól i pustych dni |
 | `--line-soft` | `#E8EDEB` | Linie podziału w tabelach |
-| `--forest-50 / 100` | `#EAF1F0` / `#D5E3E1` | Hover, zaznaczony wiersz, zakres w kalendarzu |
+| `--forest-50 / 100` | `#EAF1F0` / `#D5E3E1` | Hover, zaznaczony wiersz, zakres w kalendarzu, panel zadania |
 | `--sand-50` | `#FAF5EE` | Kolumny weekendów |
+| `--missed`, `--missed-ink` | `#9AA3A1`, `#4A5553` | Stan „nie wysłane do Dataverse" |
 
 ### 2.3 Stany dnia — reguła nadrzędna
 
@@ -52,6 +53,7 @@ Cztery zasady, które rozstrzygają spory projektowe:
 | **Zatwierdzony** | Deep Forest `#0F3D3A` | Godziny zatwierdzone przez supervisora (lub wyżej) |
 | **Do zatwierdzenia** | Golden Hour `#F4B13B` | Godziny wpisane przez pracownika lub TL, czekają na zatwierdzenie |
 | **Nieobecny** | Terracotta Clay `#E0745E` + biała kreska | Nieobecność (L4, urlop, inna) |
+| **Nie wysłane** | Szare ukośne kreski + wykrzyknik w ciemnym kółku | Nie zatwierdzone do końca do poniedziałku 23:59. Od wtorku 00:00 zatwierdza i zmienia je tylko administrator; po zatwierdzeniu idą w najbliższej wtorkowej wysyłce |
 | **Wolne / brak wpisu** | Biały + obrys `#DCE3E0`; w weekend piaskowy `#F2E6D6` | Dzień wolny albo nikt nic nie wpisał |
 
 Znaczniki na dniu:
@@ -59,54 +61,50 @@ Znaczniki na dniu:
 | Znak | Wygląd | Znaczenie |
 |---|---|---|
 | **Wysłane do Dataverse** | Zielony ptaszek `--sent #9FE3BB` w kropce; na dużej komórce kółko w rogu | Godziny poszły we wtorkowej wysyłce i są zamknięte |
-| **Zaplanowany dzień** | Pusta kropka z obrysem `--forest-100` | Przyszły dzień roboczy w okresie pracy osoby w projekcie |
-| **Do poprawy** | Obrys `#9E4232` na komórce „do zatwierdzenia" | Supervisor odrzucił dzień z powodem |
+| **Nie wysłane** | Wykrzyknik; na dużej komórce ciemne kółko w rogu, tekst przekreślony | Patrz wyżej |
+| **Zmienione** | Mała kropka w prawym dolnym rogu dużej komórki | Osoba zatwierdzająca zmieniła dzień — szczegóły w notatce dnia |
+| **Zaplanowany dzień** | Pusta kropka z obrysem `--forest-100` | Przyszły dzień roboczy w zadaniu osoby |
+| **Przerwa** | Ukośne kreski w kolorze tła | Dzień między zadaniami osoby (np. wyjazd do domu) — wtedy nie wpisuje godzin |
 | **Dziś** | Obrys Deep Forest wokół kropki, numer dnia w kropce Deep Forest | — |
-| **Koniec edycji** | Przerywana kreska `--cutoff` między poniedziałkiem a wtorkiem | Do poniedziałku włącznie można poprawić i zatwierdzić godziny poprzedniego tygodnia; we wtorek o 23:00 wysyłka do Dataverse |
+| **Kreska pn \| wt** | Przerywana linia `--cutoff` na mapie | Do poniedziałku 23:59 trzeba zatwierdzić poprzedni tydzień |
 
-- Nieobecność bez ptaszka ma poziomą białą kreskę w środku. Dzięki temu odróżnia się od „do zatwierdzenia" także dla osób, które słabo rozróżniają żółty i pomarańczowy.
-- Sobota i niedziela mają piaskowe tło kolumny; pusty weekend jest piaskową kropką, nie białą — od razu widać, że to dzień zwykle wolny.
-- Status zawsze nazywamy „Do zatwierdzenia" (nie „Czeka").
-- Golden Hour i Terracotta Clay **nie mogą** być użyte jako kolor przycisku, nagłówka, ikony dekoracyjnej ani tła sekcji.
-- Plakietki stanów (tekst) używają jasnych odcieni: `--golden-100` z tekstem `#7A5208`, `--terracotta-100` z tekstem `#9E4232`, `--forest-50` z tekstem Deep Forest.
+- Nieobecność bez ptaszka ma poziomą białą kreskę w środku — odróżnia się od „do zatwierdzenia" także dla osób, które słabo rozróżniają żółty i pomarańczowy.
+- Status zawsze nazywamy „Do zatwierdzenia" (nie „Czeka"). Nie ma stanu „do poprawy" — pracownik poprawia dzień, dopóki nikt go nie zatwierdził, a później zmienia go osoba zatwierdzająca.
+- Golden Hour i Terracotta Clay **nie mogą** być użyte jako kolor przycisku, nagłówka, ikony dekoracyjnej ani tła sekcji. Wyjątek: baner terminu (pkt 6) i liczby braków w Obsadzie — to też stan.
+- Plakietki stanów (tekst) używają jasnych odcieni: `--golden-100` z tekstem `#7A5208`, `--terracotta-100` z tekstem `#9E4232`, `--forest-50` z tekstem Deep Forest, `#E6EAE9` z tekstem `--missed-ink`.
 
 ### 2.4 Kolory identyfikacyjne projektów
 
-Projekt może mieć kolor tylko jako małą kropkę (8 px) lub pasek (3 px) przy nazwie. Paleta jest stonowana i nie zbliża się do kolorów stanów:
+Projekt ma kolor jako kropkę przy nazwie, pasek zadania w Obsadzie i delikatne tło tygodni projektu (12%). Paleta jest rozstawiona po całym kole barw, o podobnej jasności, i omija żółć oraz czerwień stanów:
 
-`#5B7A99` łupek · `#7FA7C9` niebo · `#8C6A8D` śliwka · `#A9A1C7` lawenda · `#A39B8B` kamień · `#3E5368` granat · `#9DB3B0` mgła · `#6F7F96` stal
+`#2F6FA3` kobalt · `#1E9A8A` morski · `#6A9A2E` oliwka · `#7B4FB8` fiolet · `#C24C8C` malina · `#D9822B` pomarańcz · `#3B4FC4` indygo · `#2C8FC9` lazur · `#8C5A3C` orzech · `#A33D5E` wino · `#4F6B7A` grafit · `#9A8A1F` musztarda
+
+Nowy projekt dostaje najrzadziej używany kolor.
 
 ---
 
 ## 3. Typografia
 
-**Krój: Archivo (variable)** — grotesk o technicznym rodowodzie z osią szerokości (62–125%) i grubości (100–900). Pliki fontu są w aplikacji (pakiet `@fontsource-variable/archivo`), a nie pobierane z Google Fonts, bo wtedy przeglądarka wysyła IP użytkownika do Google (RODO).
+**Krój: Plus Jakarta Sans (variable, 200–800)** — geometryczny jak Poppins, spokojny jak Helvetica, z cyframi tabelarycznymi (Poppins ich nie ma, a w siatkach godzin muszą się równać) i pełnymi polskimi znakami. Pliki fontu są w aplikacji (pakiet `@fontsource-variable/plus-jakarta-sans`), a nie pobierane z Google Fonts, bo wtedy przeglądarka wysyła IP użytkownika do Google (RODO).
 
-Jedna rodzina, trzy szerokości:
-
-| Szerokość | `font-stretch` | Zastosowanie |
-|---|---|---|
-| Rozszerzona | `112%` | Tytuły ekranów i nazwy projektów — charakter marki |
-| Normalna | `100%` | Interfejs i tekst |
-| Zwężona | `82%` | Nazwiska w gęstych siatkach, tabele, nagłówki kolumn dni |
-
-Skala (tercja wielka 1.25, baza 15 px):
+Grubości jako tokeny: `--w-light 300` · `--w-regular 400` · `--w-medium 500` · `--w-semibold 600` · `--w-bold 700` · `--w-heavy 800`.
 
 | Token | Rozmiar / interlinia | Grubość | Użycie |
 |---|---|---|---|
-| `--text-3xl` | 37 / 40 | 640, szer. 112%, tracking −0.025em | Tytuł ekranu |
-| `--text-2xl` | 29.5 / 34 | 620, szer. 112% | Tytuł panelu |
-| `--text-xl` | 23.5 / 28 | 600, szer. 108% | Nazwa projektu w nagłówku karty |
-| `--text-lg` | 18.75 / 26 | 560 | Śródtytuły sekcji |
-| `--text-md` | 15 / 22 | 420 | Tekst, pola formularzy |
-| `--text-sm` | 13.5 / 19 | 460 | Opisy, metadane, przyciski małe |
-| `--text-xs` | 12 / 16 | 500, szer. 82% | Dni tygodnia, numery tygodni |
+| `--text-3xl` | 38 / 41 | 800, tracking −0.03em | Tytuł ekranu |
+| `--text-2xl` | 29.5 / 34 | 800, tracking −0.025em | Tytuł okna |
+| `--text-xl` | 23.5 / 28 | 700, tracking −0.02em | Nazwa projektu, tytuł karty, baner terminu (300 + 800) |
+| `--text-lg` | 18.75 / 26 | 700 | Śródtytuły sekcji formularza |
+| `--text-md` | 15 / 22 | 400 | Tekst, pola formularzy |
+| `--text-sm` | 13.5 / 19 | 400–500 | Metadane, przyciski małe |
+| `--text-xs` | 12 / 16 | 600 | Nagłówki kolumn, grup, dni tygodnia |
 
 Zasady:
-- Liczby zawsze `font-variant-numeric: tabular-nums` (kolumny godzin się nie rozjeżdżają).
-- Bez WERSALIKÓW w etykietach. Wyróżniamy grubością i kolorem `--ink-2`, nie wielkimi literami.
+- **Tytuł ekranu bez podpisu pod spodem.** Ekran tłumaczy się układem, nie akapitem.
+- Opisy, podpisy i drugi plan: 300 (light) w `--ink-2`. Liczby i to, na co trzeba zareagować: 700–800.
+- Liczby zawsze `font-variant-numeric: tabular-nums`.
+- Bez WERSALIKÓW w etykietach. Wyróżniamy grubością i kolorem `--ink-2`.
 - Wielka litera tylko na początku zdania („Nowy projekt", nie „Nowy Projekt").
-- Długość wiersza tekstu ciągłego maks. ~75 znaków.
 
 ---
 
@@ -114,15 +112,13 @@ Zasady:
 
 **Siatka 4 px.** Odstępy: 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64.
 
-**Promienie zależne od hierarchii** (nie jeden promień na wszystko):
-
 | Token | Wartość | Obiekt |
 |---|---|---|
-| `--r-cell` | 25% boku | Kropka dnia (4 px przy 16 px, 9 px przy 36 px) — kształt ten sam w każdym rozmiarze |
+| `--r-cell` | 25% boku | Kropka dnia — kształt ten sam w każdym rozmiarze |
 | `--r-control` | 12 px | Pole, przycisk, chip prostokątny |
-| `--r-card` | 20 px | Karta, kalendarz, tabela |
-| `--r-sheet` | 28 px | Wysuwany panel, dock |
-| `--r-pill` | 999 px | Plakietki, chipy, wyszukiwarka, licznik pozycji do zatwierdzenia |
+| `--r-card` | 20 px | Karta, kalendarz, tabela, baner |
+| `--r-sheet` | 28 px | Okno |
+| `--r-pill` | 999 px | Dock, plakietki, chipy, wyszukiwarka, licznik terminu |
 
 **Głębia** — jeden cień dla wszystkiego, co pływa: `--shadow-float`. Karty i tabele mają tylko obrys `--line-soft`, bez cienia.
 
@@ -130,17 +126,17 @@ Zasady:
 
 ## 5. Układ
 
-- **Górna linia bez tła** (nie pasek): znak „Epcido Terminal" → „Cześć, *imię*" z rolą → po prawej:
-  - licznik **„Masz X pozycji do zatwierdzenia"** z sumą godzin (Golden Hour 100, klikany → Zatwierdzanie) dla osób, które zatwierdzają,
-  - „Masz X dni do poprawy" (Terracotta 100) dla osób z odrzuconymi dniami,
+- **Górna linia bez tła** (nie pasek): znak „Epcido Terminal" → „Cześć, *imię*" z rolą → **wyszukiwarka** → po prawej:
+  - licznik terminu **„Masz X dni i Y godzin na zatwierdzenie Z timesheetów"** (Golden Hour 100; gdy do poniedziałku 23:59 została mniej niż doba — Terracotta 100), klikany → Zatwierdzanie. Na ekranach Zatwierdzanie i Pulpit zamiast licznika jest baner,
   - przycisk główny **„Dodaj nowy projekt"** dla Administratora, Planning i Project Managera,
   - przełącznik **„Wersja mobilna / desktopowa"**.
-- **Nawigacja: pływający dock** na dole, na środku. Pozycje zależą od roli (`domain/permissions.ts`). Bez przycisku „+". Zatwierdzanie ma licznik w kropce Golden Hour. Pracownik z jednym ekranem nie widzi docku.
-- Treść wyrównana do lewej, maks. szerokość 1440 px, marginesy boczne 32 px (16 px w wąskiej ramce). Dół strony ma 148 px zapasu na dock.
+- **Wyszukiwarka u góry**, nie w docku. Podpowiada od pierwszej litery: projekty, ludzie, „Godziny od Supervisora X" (IM), ekrany i „Dodaj nowy projekt". Strzałki + Enter, Escape czyści. Widzisz tylko to, do czego masz dostęp.
+- **Dock na wysokość ikon**: jeden rząd, ikona + krótka nazwa, aktywny ekran w pigułce Deep Forest. Narzędzia tylko dla Planningu (Obsada) stoją osobno, za kreską, na piaskowym tle. W wąskiej ramce nazwy znikają poza aktywną. Pracownik z jednym ekranem nie widzi docku.
+- Treść wyrównana do lewej, maks. 1440 px, marginesy boczne 32 px (16 px w wąskiej ramce), 104 px zapasu na dock.
+- **Przyklejone nagłówki**: na mapie pasek legendy z nawigacją tygodni i wspólny nagłówek dni zostają u góry przy przewijaniu projektów. W planie zespołu nagłówek dni i kolumna osób są przyklejone w obu kierunkach.
 - **Edytor projektu na pełnym ekranie**: pasek z „Wróć", nazwą, stanem zapisu i akcją główną; po lewej dane projektu (420 px), po prawej plan zespołu.
 - **Okna dialogowe** na środku; w wąskiej ramce wysuwają się od dołu.
-- **Wąska ramka**: style reagują na szerokość ramki aplikacji (container queries), nie okna. Dzięki temu podgląd mobilny na komputerze wygląda dokładnie jak telefon.
-- **Panel roboczy** (tylko prototyp): po lewej, przerywana linia i plakietka „prototyp", żeby nie mylił się z produktem.
+- **Wąska ramka**: style reagują na szerokość ramki aplikacji (container queries), nie okna.
 
 ---
 
@@ -149,66 +145,67 @@ Zasady:
 ### Przyciski
 | Wariant | Wygląd | Kiedy |
 |---|---|---|
-| Główny | Tło Deep Forest, tekst biały, 44 px wysokości | Jedna główna akcja w widoku („Utwórz projekt") |
+| Główny | Tło Deep Forest, tekst biały, 44 px | Jedna główna akcja w widoku („Zapisz i zatwierdź") |
 | Drugorzędny | Białe tło, obrys `--line`, tekst `--ink` | Pozostałe akcje |
 | Cichy | Bez tła, tekst `--ink-2`, hover `--forest-50` | Akcje w wierszach, „Anuluj" |
 | Niszczący | Biały, tekst `#9E4232`, zawsze z potwierdzeniem | Usunięcie, reset danych |
 
-Tekst przycisku mówi, co się stanie: „Utwórz projekt", „Zapisz zmiany", „Dodaj do zespołu". Komunikat po akcji używa tego samego słowa: „Projekt utworzony", „Zmiany zapisane".
+Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego słowa: „Zaplanuj" → „Zaplanowano".
+
+### Baner terminu
+- Karta z gradientem Golden 100 → biały, ikona budzika w kwadracie 52 px.
+- Treść: „Masz **3 dni i 1 godzinę** na zatwierdzenie **13 timesheetów**" (300 + 800), pod spodem lekki wiersz: termin (pn 23:59) i wysyłka (wt 23:00).
+- Mniej niż doba do terminu → gradient Terracotta 100, ikona na Terracotta.
+- Wszystko zatwierdzone → gradient Forest 50, ptaszek.
+- **Nigdy nie pokazujemy sumy godzin do zatwierdzenia** — liczy się czas do terminu i liczba timesheetów (timesheet = tydzień jednej osoby w projekcie).
+
+### Okno dnia (notatka zmian)
+- Otwiera się po kliknięciu dnia na osi czasu i w zatwierdzaniu.
+- Góra: plakietka stanu i lekki tekst „Zatwierdzone przez X · data, godzina".
+- Praca / Nieobecność (przełącznik), godziny krokami 15 min, przerwa przyciskami, opcjonalny komentarz.
+- „Notatka dnia": lista zmian od najnowszej — data, kto, „7:00–18:00 → 7:00–17:00 — „komentarz"". Wpisów nie da się usunąć.
+- Przyciski: „Zapisz zmianę" i — gdy osoba może zatwierdzić — „Zapisz i zatwierdź".
+
+### Dymek dnia
+- Na dużej komórce: tylko **kto i kiedy** zatwierdził (i zmienił) — bez powtarzania godzin z kafelka.
+- Na kropce mapy (bez treści): osoba, data, godziny, potem kto i kiedy zatwierdził.
 
 ### Pola formularza
 - Wysokość 44 px, promień 12 px, obrys `--line`, fokus: obrys Deep Forest + pierścień `--forest-100` 3 px.
-- Etykieta nad polem, `--text-sm`, grubość 520, kolor `--ink-2`.
-- Błąd: tekst pod polem w `#9E4232`, mówi co poprawić („Podaj datę startu").
-- Pola wpływające na integracje (Dataverse) są w osobnej sekcji z ostrzeżeniem.
-
-### Kalendarz (wybór daty)
-- Karta `--r-card`, cień pływający, tydzień od poniedziałku: Pn Wt Śr Cz Pt So Nd.
-- Dni jako kwadraty 36 px z promieniem 25% (to ta sama „kropka dnia", tylko większa).
-- Wybrany dzień: wypełnienie Deep Forest, biały numer. Dziś: obrys Deep Forest. Zakres: `--forest-50`. Weekendy: numer w `--ink-2`.
-- Golden Hour i Terracotta nie pojawiają się w kalendarzu wyboru daty.
+- Etykieta nad polem, `--text-sm`, kolor `--ink-2`. Błąd pod polem w `#9E4232`, mówi co poprawić.
 
 ### Lista wyboru
-- Zawsze własna lista aplikacji (`SelectMenu`), nigdy systemowa `<select>` — systemowa wygląda inaczej w każdej przeglądarce i dochodzi do krawędzi.
-- Lista: karta 16 px, odstęp 6 px od krawędzi, pozycje 40 px, wybrana z ptaszkiem w Deep Forest, podpowiedź po prawej w `--ink-2`.
-- Warianty: pole formularza, cichy (bez obrysu, w tabelach i panelu), przycisk akcji („Przenieś do…").
+- Zawsze własna lista aplikacji (`SelectMenu`), nigdy systemowa `<select>`.
 
-### Wybór godziny (ekran pracownika)
-- Duże cyfry 44 px, szerokość 112%, Deep Forest: „7:00 → 17:00".
-- Pod każdą godziną przyciski − / + (krok 15 min, 52 × 48 px) — wygodne w rękawicach.
-- Przerwa jako przyciski 0 / 15 / 30 / 45 / 60 (minuty), wybrana w Deep Forest.
-- Pod spodem „Czas pracy: 9 h 30 min" i jeden duży przycisk „Wyślij do zatwierdzenia" (60 px).
+### Wybór godziny
+- Duże cyfry Deep Forest, pod każdą godziną − / + (krok 15 min). Przerwa jako przyciski 0 / 15 / 30 / 45 / 60.
+- W oknie dnia wariant zwarty (28 px cyfry).
 
 ### Duża komórka dnia
 - Oś czasu i zatwierdzanie: komórka 86 px (80 px w wąskiej ramce), promień 10 px.
-- Treść: „7:00–17:00" (12 px, 640, szer. 82%) i „przerwa 30 min"; nieobecność: „L4" / „Urlop" i powód.
-- Ptaszek Dataverse w kółku na rogu komórki, z białą obwódką.
-- W zatwierdzaniu komórkę „do zatwierdzenia" klika się, żeby ją zaznaczyć (pierścień Deep Forest i ✓).
+- „7:00–17:00" (12 px, 700) i „przerwa 30 min" (10.5 px, 400); nieobecność: „L4" / „Urlop".
+- Kliknięcie otwiera okno dnia. Bez zaznaczania wielu dni i bez „Zatwierdź wszystko" — zatwierdza się timesheet (wiersz) albo dzień.
 
-### Liczby do zatwierdzenia
-- Zatwierdzanie i pulpit pokazują liczby dużo (56 px, szer. 112%, Deep Forest): pozycje i godziny. To jedyne miejsce na tak duże liczby — tu są treścią ekranu.
-- Po terminie: liczba w `#9E4232`.
+### Plan zespołu (zadania)
+- **Kafelek = zadanie** osoby w projekcie od–do: `--forest-100`, promień 8 px, etykieta „**Prace elektryczne** 12 paź – 30 lis" (przykleja się do lewej krawędzi przy przewijaniu).
+- Osoba może mieć kilka zadań. **Przerwa** między nimi: piaskowe ukośne kreski z napisem „przerwa · 9 dni". W przerwie pracownik nie wpisuje godzin.
+- Kliknięcie kafelka → panel zadania nad planem (nazwa, od, do, „Wstaw przerwę" 7/10/14 dni, „Usuń zadanie"). Kliknięcie pustego miejsca w wierszu → nowe zadanie.
+- Przeciąganie przesuwa, brzegi zmieniają start lub koniec. Wybrany kafelek: Deep Forest z pierścieniem.
+- Kolizja z innym projektem lub innym zadaniem: tło `--terracotta-100`, obrys `#9E4232`.
+- Ta sama osoba w innych projektach: szary kreskowany pasek z kreską w kolorze projektu.
+- Oś sięga zawsze **3 miesiące za najdalsze zadanie** i rośnie podczas przeciągania.
 
-### Plan zespołu (paski)
-- Pasek = okres pracy osoby w projekcie: `--forest-100`, promień 8 px, etykieta „12 paź – 30 lis".
-- Przeciąganie całego paska przesuwa okres, brzegi zmieniają start lub koniec. Podczas przeciągania pasek jest Deep Forest z cieniem.
-- Kolizja z innym projektem: tło `--terracotta-100` i obrys `#9E4232`, dymek mówi, z czym koliduje.
-- Ta sama osoba w innych projektach: szary, kreskowany pasek w tle wiersza.
-- Poza terminem projektu: kreskowane tło; dziś: pionowa linia Deep Forest.
+### Obsada
+- Kafle u góry są filtrami (liczba 36 px, 800): zwalnia się, bez przydziału, długo bez przerwy, projekty z brakami.
+- Projekty × tygodnie: tło tygodni w kolorze projektu (12%), w komórce „E 6/8 · M 4/4". Obsadzony — Deep Forest, brak — `#9E4232` grubo, bez zapotrzebowania — `--ink-2`. Koniec projektu: pionowa kreska w kolorze projektu z napisem „koniec".
+- Ludzie × tygodnie: paski w kolorach projektów, przerwy piaskowe z ikoną kubka, linia „dziś". Po prawej „co dalej": ostrzeżenie „8 tyg. bez przerwy", podpowiedź projektu z brakiem i przyciski „Zaplanuj dalej" / „Przerwa".
 
-### Plakietki (stany, role)
-- Promień `--r-pill`, wysokość 24 px, `--text-sm` 520.
-- Stany: patrz 2.3. Role: tło `--sand`, tekst `--ink`.
+### Plakietki
+- Promień `--r-pill`, wysokość 24 px, `--text-sm` 500, ikona 10 px z odstępem 6 px.
 
 ### Kropki dni
-- Mapa projektów: 16 px w kolumnie 20 px.
-- Pasek tygodnia przy osobie: 12 px.
-- Kalendarz: 36 px.
-- Zawsze promień 25%, zawsze z dymkiem po najechaniu (osoba, data, godziny, stan).
-- Znaczniki stanowisk (SV, TL, E, M) nie mają dymków — są oczywiste.
-
-### Kalendarz w panelu
-Kalendarz otwiera się nad stroną (nie wewnątrz panelu), żeby nic go nie przycinało. Gdy pod polem brakuje miejsca, otwiera się w górę.
+- Mapa: 16 px w kolumnie 20 px. Pasek tygodnia przy osobie: 12 px. Kalendarz: 36 px. Zawsze promień 25%.
+- Znaczniki stanowisk (SV, TL, E, M) nie mają dymków.
 
 ---
 
@@ -216,50 +213,49 @@ Kalendarz otwiera się nad stroną (nie wewnątrz panelu), żeby nic go nie przy
 
 | Wzorzec | Gdzie | Zasada |
 |---|---|---|
-| **Karta projektu** | Mapa, oś czasu, zatwierdzanie | Nagłówek: nazwa (szer. 108%) i numer → klient, miasto → supervisor → po prawej: liczba osób, „Do zatwierdzenia: X pozycji, Y h", „Do poprawy", „W Dataverse do …". Pod spodem siatka: **wiersze = ludzie, kolumny = dni**. |
-| **Siatka dni** | Mapa (kropki 16 px), oś czasu (komórki 86 px) | Nagłówek: miesiąc, pod nim numery dni (na osi czasu także Pn/Wt…). Lewa kolumna z nazwiskami przyklejona. Weekendy na piaskowym tle, kreska pn|wt, dni poza okresem pracy osoby puste. Mapa dobiera liczbę tygodni do szerokości ekranu; oś czasu pokazuje 2 tygodnie. Bez podświetlania wierszy. |
-| **Zatwierdzanie** | Supervisor, IM, admin | Duże liczby + termin + „Zatwierdź wszystko". Grupy: projekt → tydzień → osoby. Tygodnie po terminie z plakietką „Po terminie". Zaznaczone dni → czarny pasek akcji u góry. |
-| **Pulpit** | Installation Manager, admin | Trzy kafle (supervisorzy, czeka na Ciebie, termin) i tabela supervisorów: do zatwierdzenia, po terminie, postęp tygodnia, czeka na Ciebie. |
-| **Drzewko** | Struktura | Linie 1.5 px `--line`. Węzeł nadrzędny z wypełnionym znacznikiem (IM), dzieci jako karty, członkowie zespołu jako chipy na jednym poziomie. |
-| **Pasek tygodnia** | Ludzie, zespół | 7 mini-kropek (12 px) bieżącego tygodnia przy osobie. |
-| **Edytor projektu** | Tworzenie i edycja | Pełny ekran. Dane projektu po lewej, „Plan zespołu" i „Historia zmian" po prawej. Zapis jednym przyciskiem, stan „Niezapisane zmiany / Wszystko zapisane" przy tytule. |
-| **Ekran pracownika** | Telefon | Projekt dnia → karta dnia (godziny, przerwa, wyślij) → „Zgłoś nieobecność" → tydzień jako lista dni z kropką stanu. |
+| **Karta projektu** | Mapa, oś czasu, zatwierdzanie | Nagłówek: nazwa i numer → klient, miasto → supervisor → po prawej: liczba osób, „Do zatwierdzenia: X timesheetów", „Nie wysłane: Y timesheetów", „W Dataverse do …". Pod spodem siatka: **wiersze = ludzie, kolumny = dni**. |
+| **Siatka dni** | Mapa, oś czasu | Nagłówek: miesiąc, pod nim numery dni. Na mapie nagłówek jest wspólny i przyklejony u góry. Weekendy piaskowe, kreska pn\|wt, przerwy kreskowane. Bez podświetlania wierszy. |
+| **Zatwierdzanie** | Supervisor, IM, administrator | Tytuł → baner terminu → (SV, IM) informacja o timesheetach po terminie → projekt → tydzień → osoby z przyciskiem „Zatwierdź". Administrator widzi też tygodnie po terminie z plakietką „Po terminie · nie wysłane do Dataverse". |
+| **Pulpit** | Installation Manager, administrator | Baner terminu i tabela supervisorów: do zatwierdzenia (timesheety), postęp tygodnia (%), czeka na Ciebie, nie wysłane, „Przejrzyj i zatwierdź". |
+| **Drzewko** | Struktura | Linie 1.5 px `--line`. IM → projekt → supervisor → grupy (TL, elektrycy, mechanicy) **jedna pod drugą, jedna osoba w wierszu**. |
+| **Edytor projektu** | Tworzenie i edycja | Pełny ekran. Dane projektu (z zapotrzebowaniem) po lewej, „Plan zespołu" i „Historia zmian" po prawej. |
+| **Obsada** | Planning, administrator | Kafle-filtry → projekty w tygodniach → ludzie w tygodniach z „co dalej". Jedno okno „Zaplanuj dalej": przerwa → start → projekt z brakami jego branży → zadanie. |
+| **Ekran pracownika** | Telefon | Projekt dnia (albo „Przerwa") → karta dnia → „Zgłoś nieobecność" → tydzień jako lista dni z kropką stanu. Zmiany od supervisora widać pod dniem. |
 
 ---
 
 ## 7. Ruch
 
-- Ruch odpowiada na działanie użytkownika: panel się wysuwa (240 ms), kalendarz się pojawia (160 ms), zaznaczenie w docku się przesuwa.
-- Jeden moment „wejścia": przy pierwszym wczytaniu mapy kropki pojawiają się tydzień po tygodniu (łącznie < 500 ms). Nic więcej nie animuje się samo.
-- `prefers-reduced-motion` wyłącza wszystkie animacje.
-- Krzywa: `cubic-bezier(.2, .8, .2, 1)`.
+- Ruch odpowiada na działanie użytkownika: okno się pojawia (240 ms), podpowiedzi i panel zadania (160 ms).
+- `prefers-reduced-motion` wyłącza wszystkie animacje. Krzywa: `cubic-bezier(.2, .8, .2, 1)`.
 
 ---
 
 ## 8. Język interfejsu
 
-- Polski, prosty, w drugiej osobie tylko gdy to konieczne. Nazwy z punktu widzenia użytkownika: „Zespół", „Nieobecny", a nie „assignment", „absence record".
-- Puste stany mówią, co zrobić: „Ten projekt nie ma jeszcze zespołu. Dodaj supervisora i pracowników."
-- Błędy mówią, co się stało i jak to naprawić, bez przeprosin.
-- Stanowiska: Installation Manager, Supervisor, Team Leader, Elektryk, Mechanik — w tej formie wszędzie.
-- Daty: „13 paź 2026", dni „wt, 13 paź", tygodnie „tydz. 42".
+- Polski, prosty. Nazwy z punktu widzenia użytkownika: „Zadanie", „Przerwa", „Nieobecny", a nie „assignment", „absence record".
+- Zawsze **„projekt"**, nigdy „budowa".
+- „Timesheet" = tydzień jednej osoby w jednym projekcie. Odmiana: 1 timesheet, 2 timesheety, 5 timesheetów; „na zatwierdzenie 1 timesheetu / 5 timesheetów".
+- Puste stany mówią, co zrobić. Błędy mówią, co się stało i jak to naprawić, bez przeprosin.
+- Daty: „13 paź 2026", dni „wt, 13 paź", tygodnie „tydz. 42", godziny zdarzeń „16 paź 2026, 14:32".
 
 ---
 
 ## 9. Dostępność
 
-- Kontrast tekstu min. 4.5:1 (sprawdzone dla `--ink`, `--ink-2` i plakietek).
-- Kolor nigdy nie jest jedyną informacją: kropki mają opis dostępny dla czytników i dymek, nieobecność ma dodatkowy znak.
-- Widoczny fokus klawiatury na każdym elemencie interaktywnym.
+- Kontrast tekstu min. 4.5:1 (sprawdzone dla `--ink`, `--ink-2`, `--missed-ink` i plakietek).
+- Kolor nigdy nie jest jedyną informacją: nieobecność ma kreskę, „nie wysłane" ma kreski i wykrzyknik, wysłane ma ptaszek.
+- Widoczny fokus klawiatury na każdym elemencie interaktywnym; kafelki zadań obsługuje się też klawiaturą (Enter, strzałki).
 - Cele dotykowe min. 44 px w aplikacji mobilnej.
 
 ---
 
 ## 10. Checklista przed oddaniem ekranu
 
-- [ ] Golden Hour i Terracotta użyte tylko jako stan dnia?
+- [ ] Golden Hour i Terracotta użyte tylko jako stan?
+- [ ] Tytuł bez podpisu, hierarchia grubością (800 / 300)?
+- [ ] Nigdzie suma godzin do zatwierdzenia?
 - [ ] Cień tylko na elementach pływających?
-- [ ] Promień zgodny z hierarchią?
-- [ ] Liczby tabelaryczne, etykiety bez wersalików?
+- [ ] Liczby tabelaryczne, etykiety bez wersalików, „projekt" zamiast „budowa"?
 - [ ] Pusty stan i błąd mówią, co zrobić?
 - [ ] Działa na 375 px szerokości i z klawiatury?
