@@ -1,9 +1,7 @@
-# Epcido Terminal — prototyp frontendowy
+# Epcido Terminal
 
-Prototyp frontendu (React + TypeScript + Vite) do zastąpienia Gantbee.
-Dane na razie żyją w localStorage przeglądarki (plik `src/data/store.ts`) —
-to świadomy skrót, żeby szybko testować UX bez backendu. Gdy przejdziemy
-na Firebase, wymienimy WYŁĄCZNIE implementację funkcji w tym jednym pliku.
+System planowania projektów i czasu pracy dla Epcido — następca Gantbee.
+Etap: **prototyp widoku planisty** (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
 
 ## Uruchomienie
 
@@ -12,33 +10,65 @@ npm install
 npm run dev
 ```
 
-Otwórz http://localhost:5173 — zobaczysz ekran logowania z listą
-użytkowników testowych (różne role). Wybierz dowolnego, żeby zobaczyć
-widok danej roli.
+- `http://localhost:5173` — dane z Firebase (na żywo).
+- `http://localhost:5173/?demo` — tryb demo: dane testowe w przeglądarce, bez bazy.
 
-## Role i przepływ
+## Pierwsze połączenie z Firebase (jednorazowo)
 
-- **Planning** — tworzy projekty, przypisuje pracowników (mechanik/elektryk)
-- **Pracownik / Team Leader** — wpisuje godziny dzień po dniu
-- **Supervisor** — akceptuje godziny swojego zespołu (projekty, do których jest przypisany)
-- **Project Manager** — akceptuje zbiorczo godziny już zaakceptowane przez swoich Supervisorów
-- **Administrator** — widzi wszystko (na razie jak PM+Planning razem)
+1. Otwórz [konsolę Firebase → Firestore](https://console.firebase.google.com/project/epcido-terminal/firestore).
+2. **Create database** → lokalizacja **europe-central2 (Warszawa)** → tryb **production**.
+   Lokalizacji nie da się później zmienić.
+3. Zakładka **Rules** → wklej zawartość pliku `firestore.rules` → **Publish**.
+4. Uruchom aplikację. Zobaczysz „Baza jest pusta" → kliknij **Wgraj dane testowe**.
+5. Otwórz aplikację w drugiej przeglądarce — zmiany pojawiają się u obu na żywo.
 
-## Reset danych testowych
+> Reguły prototypu wpuszczają każdego do 31.12.2026 (brak logowania). **Tylko dane testowe.**
+> Następny krok bezpieczeństwa: Firebase Authentication i reguły oparte o role.
 
-W konsoli przeglądarki: `localStorage.clear()` i odśwież stronę —
-dane wrócą do stanu początkowego (`src/mock/seed.ts`).
+## Co jest w środku
 
-## Struktura
+| Ekran | Adres | Co robi |
+|---|---|---|
+| Mapa | `/mapa` | Wszystkie projekty jako siatki dni (12 tygodni). Kolor dnia = stan godzin. |
+| Oś czasu | `/os-czasu` | Każda osoba dzień po dniu, grupowane po projektach. `?projekt=ID` pokazuje jeden projekt. |
+| Struktura | `/struktura` | Drzewko: Installation Manager → projekt i Supervisor → zespół. |
+| Ludzie | `/ludzie` | Lista osób, filtry, przypisywanie i przenoszenie między projektami. |
+| Brandbook | `/brandbook` | Żywy podgląd kolorów, kroju i komponentów. |
+
+Przycisk **+** w docku tworzy nowy projekt. Kliknięcie nazwy projektu otwiera panel: zespół, dane projektu, historia zmian.
+
+### Kolory dni (obowiązują w całym systemie)
+
+| Kolor | Znaczenie |
+|---|---|
+| Deep Forest `#0F3D3A` | Zatwierdzone przez supervisora |
+| Golden Hour `#F4B13B` | Czeka na zatwierdzenie |
+| Terracotta Clay `#E0745E` | Nieobecny |
+| Biały | Wolne lub brak wpisu |
+
+### Dane testowe
+
+4 Installation Managerów, 10 Supervisorów, 20 Team Leaderów, 50 elektryków, 50 mechaników, 10 projektów, godziny z ostatnich 10 tygodni. Generator: `src/data/seed.ts` (deterministyczny — u każdego te same dane).
+
+## Struktura kodu
 
 ```
 src/
-  types.ts              # model domenowy (Employee, Project, TimeEntry...)
-  mock/seed.ts           # dane testowe
-  data/store.ts           # warstwa danych — tu podmienimy localStorage na Firebase
-  context/SessionContext.tsx  # symulowane logowanie (docelowo Firebase Auth)
-  components/            # Layout, StatusBadge
-  pages/                 # ekrany per rola
+  app/          DataContext (dane + akcje), UiContext (wyszukiwanie, panel, komunikaty)
+  data/         repository.ts (granica z bazą), commands.ts (zmiany + dziennik),
+                firestoreRepo.ts, memoryRepo.ts (demo), seed.ts
+  domain/       typy, etykiety, reguła stanu dnia projektu
+  components/   kropka dnia, dock, panel, kalendarz, pola formularza…
+  features/     map, timeline, structure, people, project, brandbook
+  styles/       tokens.css (źródło prawdy designu), base, components, views
+docs/
+  BRANDBOOK.md  zasady designu dla wszystkich modułów
+  adr/          decyzje architektoniczne
+firestore.rules reguły bezpieczeństwa bazy
 ```
 
-Pełny plan i architektura docelowa: patrz `PLAN_I_ARCHITEKTURA.md` w projekcie.
+Zasada: ekrany nie rozmawiają z bazą. Każda zmiana to polecenie w `commands.ts`, które zwraca zapisy **i wpis do dziennika zmian**; repozytorium zapisuje je razem (w Firestore jednym batchem). Przejście na docelowy backend = nowa implementacja `Repository`.
+
+## Wdrożenie (Vercel)
+
+Repozytorium → vercel.com → Add Project → preset **Vite** → Deploy. Plik `vercel.json` obsługuje adresy podstron.

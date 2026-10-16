@@ -1,0 +1,60 @@
+rules_version = '2';
+
+// Reguły dla PROTOTYPU z danymi testowymi.
+//
+// Uwaga: dopóki nie ma logowania, każdy, kto zna adres projektu Firebase, może czytać i zapisywać
+// dane. Dlatego:
+//   1. dostęp wygasa automatycznie (TEST_UNTIL) — potem baza odrzuca wszystko,
+//   2. nie wolno tu wgrywać prawdziwych danych osobowych,
+//   3. dziennik zmian (auditLog) można tylko dopisywać — nikt go nie edytuje ani nie usuwa.
+//
+// Następny krok: Firebase Authentication i reguły oparte o role (planista, supervisor, IM).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function testWindowOpen() {
+      return request.time < timestamp.date(2026, 12, 31);
+    }
+
+    function isValidProject() {
+      let d = request.resource.data;
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 120
+        && d.number is string && d.number.size() > 0 && d.number.size() <= 20
+        && d.status in ['PLANNED', 'ACTIVE', 'ON_HOLD', 'CLOSED'];
+    }
+
+    match /employees/{id} {
+      allow read, write: if testWindowOpen();
+    }
+
+    match /projects/{id} {
+      allow read, delete: if testWindowOpen();
+      allow create, update: if testWindowOpen() && isValidProject();
+    }
+
+    match /assignments/{id} {
+      allow read, delete: if testWindowOpen();
+      allow create, update: if testWindowOpen()
+        && request.resource.data.projectId is string
+        && request.resource.data.employeeId is string;
+    }
+
+    match /timesheets/{id} {
+      allow read, write: if testWindowOpen();
+    }
+
+    match /meta/{id} {
+      allow read, write: if testWindowOpen();
+    }
+
+    // Dziennik zmian: tylko odczyt i dopisywanie.
+    match /auditLog/{id} {
+      allow read: if testWindowOpen();
+      allow create: if testWindowOpen()
+        && request.resource.data.action is string
+        && request.resource.data.at is string;
+      allow update, delete: if false;
+    }
+  }
+}

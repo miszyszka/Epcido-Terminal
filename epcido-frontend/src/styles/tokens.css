@@ -1,0 +1,98 @@
+/*
+ * Epcido Terminal — tokeny designu.
+ * Źródło prawdy dla docs/BRANDBOOK.md. Zmieniasz token → zmieniasz też brandbook.
+ */
+@import "@fontsource-variable/archivo/wdth.css";
+
+:root {
+  /* Paleta marki (CI) */
+  --forest: #0f3d3a;
+  --golden: #f4b13b;
+  --terracotta: #e0745e;
+  --sand: #f2e6d6;
+
+  /* Pochodne marki */
+  --forest-700: #1e5450;
+  --forest-500: #4e7a76;
+  --forest-100: #d5e3e1;
+  --forest-50: #eaf1f0;
+  --golden-100: #fce9c4;
+  --golden-ink: #7a5208;
+  --terracotta-100: #f8dcd5;
+  --terracotta-ink: #9e4232;
+  --sand-50: #faf5ee;
+
+  /* Kolory robocze */
+  --ground: #eef2f0;
+  --surface: #ffffff;
+  --surface-2: #f6f8f7;
+  --ink: #102826;
+  --ink-2: #4f605d;
+  --ink-3: #8a9895;
+  --line: #dce3e0;
+  --line-soft: #e8edeb;
+
+  /* Stany dnia — jedyne dozwolone użycie golden i terracotta jako wypełnienia */
+  --day-approved: var(--forest);
+  --day-pending: var(--golden);
+  --day-absent: var(--terracotta);
+  --day-off: var(--surface);
+  --day-off-line: var(--line);
+
+  /* Typografia */
+  --font: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --text-xs: 12px;
+  --text-sm: 13.5px;
+  --text-md: 15px;
+  --text-lg: 18.75px;
+  --text-xl: 23.5px;
+  --text-2xl: 29.5px;
+  --text-3xl: 37px;
+  --stretch-condensed: 82%;
+  --stretch-normal: 100%;
+  --stretch-expanded: 112%;
+
+  /* Przestrzeń (siatka 4 px) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+
+  /* Promienie zależne od hierarchii */
+  --r-cell: 4px;
+  --r-control: 12px;
+  --r-card: 20px;
+  --r-sheet: 28px;
+  --r-pill: 999px;
+
+  /* Głębia — tylko dla elementów pływających */
+  --shadow-float: 0 18px 48px -12px rgb(15 61 58 / 0.24), 0 2px 8px rgb(15 61 58 / 0.06);
+  --focus-ring: 0 0 0 3px var(--forest-100);
+
+  /* Ruch */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 160ms;
+  --dur: 240ms;
+
+  /* Kropki dni */
+  --cell-map: 16px;
+  --cell-gap: 4px;
+  --cell-timeline: 20px;
+  --col-timeline: 26px;
+
+  /* Układ */
+  --page-max: 1440px;
+  --page-pad: 32px;
+  --dock-clearance: 148px;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --page-pad: 16px;
+    --text-3xl: 30px;
+  }
+}
