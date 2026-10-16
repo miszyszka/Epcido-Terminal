@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Assignment, DayEntry, Employee, Project, ProjectInput } from "../domain/types";
+import type { AbsenceType, Assignment, DayEntry, Employee, Project, ProjectInput } from "../domain/types";
+import type { QueueItem } from "../domain/workflow";
 import type { ChangeSet, RepoError, Repository, Snapshot } from "../data/repository";
 import * as commands from "../data/commands";
-import { CommandError, type Actor } from "../data/commands";
+import { CommandError, type Actor, type DraftAssignment } from "../data/commands";
 import { createMemoryRepository, resetDemoStorage } from "../data/memoryRepo";
-import { PLANNER_ID, PLANNER_NAME } from "../data/seed";
+import { todayISO, type ISODate } from "../lib/dates";
+import { useSession } from "./SessionContext";
 import { useUi } from "./UiContext";
 
 export type DataMode = "firebase" | "demo";
@@ -13,47 +15,60 @@ export type DataStatus =
   | { state: "ready" }
   | { state: "error"; error: RepoError };
 
-/** Do czasu wprowadzenia logowania wszystkie zmiany zapisują się jako Planista 1. */
-const ACTOR: Actor = { id: PLANNER_ID, name: PLANNER_NAME };
 const MODE_KEY = "epcido-data-mode";
 
 export interface Team {
   project: Project;
+  projectManager: Employee | null;
   installationManager: Employee | null;
   supervisor: Employee | null;
   teamLeaders: Employee[];
   electricians: Employee[];
   mechanics: Employee[];
-  /** Wszyscy członkowie z przypisania (TL + elektrycy + mechanicy) */
+  /** Członkowie aktywni w danym dniu (TL + elektrycy + mechanicy) */
   members: Employee[];
+}
+
+export interface Row {
+  employee: Employee;
+  /** Okresy pracy w projekcie (supervisor: cały projekt) */
+  periods: { from: ISODate; to: ISODate | null }[];
 }
 
 export interface Model {
   snapshot: Snapshot;
   employees: Employee[];
   projects: Project[];
+  assignments: Assignment[];
   employeeById: Map<string, Employee>;
   projectById: Map<string, Project>;
-  assignmentByEmployee: Map<string, Assignment>;
-  membersByProject: Map<string, Assignment[]>;
+  assignmentsByProject: Map<string, Assignment[]>;
+  assignmentsByEmployee: Map<string, Assignment[]>;
   /** projectId → employeeId → data → wpis */
   entries: Map<string, Map<string, Map<string, DayEntry>>>;
-  team: (projectId: string) => Team | null;
   entry: (projectId: string, employeeId: string, date: string) => DayEntry | undefined;
-  /** Projekt, w którego zespole jest osoba (lub który nadzoruje / prowadzi) */
-  projectsOf: (employeeId: string) => Project[];
+  /** Wszystkie dni osoby we wszystkich projektach */
+  entriesOf: (employeeId: string) => Map<ISODate, { projectId: string; entry: DayEntry }>;
+  activeAssignment: (employeeId: string, date: ISODate) => Assignment | undefined;
+  team: (projectId: string, date?: ISODate) => Team | null;
+  /** Wiersze projektu w zakresie dat: supervisor + osoby z przypisaniem nakładającym się na zakres */
+  rows: (projectId: string, from: ISODate, to: ISODate) => Row[];
+  /** Projekty osoby na dziś (zespół, nadzór lub zarządzanie) */
+  projectsOf: (employeeId: string, date?: ISODate) => Project[];
 }
 
 interface DataValue {
   mode: DataMode;
   status: DataStatus;
   model: Model | null;
+  user: Employee | null;
   switchMode: (mode: DataMode) => void;
-  createProject: (input: ProjectInput) => Promise<string | null>;
-  updateProject: (id: string, input: ProjectInput) => Promise<boolean>;
-  addMember: (projectId: string, employeeId: string) => Promise<boolean>;
-  removeMember: (assignmentId: string) => Promise<boolean>;
-  moveMember: (employeeId: string, toProjectId: string) => Promise<boolean>;
+  saveProject: (id: string | null, input: ProjectInput, team: DraftAssignment[]) => Promise<string | null>;
+  assignToProject: (employeeId: string, projectId: string) => Promise<boolean>;
+  submitHours: (args: { projectId: string; employeeId: string; date: ISODate; start: number; end: number; breakMin: number }) => Promise<boolean>;
+  reportAbsence: (args: { employeeId: string; from: ISODate; to: ISODate; type: AbsenceType; note?: string }) => Promise<boolean>;
+  approve: (items: QueueItem[]) => Promise<boolean>;
+  reject: (items: QueueItem[], reason: string) => Promise<boolean>;
   loadTestData: () => Promise<boolean>;
   clearData: () => Promise<boolean>;
 }
@@ -74,6 +89,7 @@ function detectMode(): DataMode {
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { toast } = useUi();
+  const { userId } = useSession();
   const [mode] = useState<DataMode>(detectMode);
   const [repo, setRepo] = useState<Repository | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -83,10 +99,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const r =
-        mode === "demo"
-          ? createMemoryRepository()
-          : (await import("../data/firestoreRepo")).createFirestoreRepository();
+      const r = mode === "demo" ? createMemoryRepository() : (await import("../data/firestoreRepo")).createFirestoreRepository();
       if (!cancelled) setRepo(r);
     })().catch((e: unknown) =>
       setStatus({ state: "error", error: { code: "init", message: e instanceof Error ? e.message : String(e) } })
@@ -117,13 +130,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [repo]);
 
   const model = useMemo(() => (snapshot ? buildModel(snapshot) : null), [snapshot]);
+  const user = useMemo(() => {
+    if (!model) return null;
+    return model.employeeById.get(userId) ?? model.employees.find((e) => e.role === "PLANNING") ?? model.employees[0] ?? null;
+  }, [model, userId]);
+  const actorRef = useRef<Actor>({ id: "anon", name: "Nieznany" });
+  useEffect(() => {
+    if (user) actorRef.current = { id: user.id, name: user.name };
+  }, [user]);
 
   const commit = useCallback(
-    async (build: (s: Snapshot) => ChangeSet, success?: string): Promise<boolean> => {
+    async (build: (s: Snapshot, actor: Actor) => ChangeSet, success?: string): Promise<boolean> => {
       const current = snapshotRef.current;
       if (!repo || !current) return false;
       try {
-        const changes = build(current);
+        const changes = build(current, actorRef.current);
         if (changes.writes.length === 0 && changes.audit.length === 0) {
           toast("Nic się nie zmieniło");
           return true;
@@ -145,6 +166,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       mode,
       status,
       model,
+      user,
       switchMode(next) {
         try {
           if (next === "demo") localStorage.setItem(MODE_KEY, "demo");
@@ -156,30 +178,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
         url.searchParams.delete("demo");
         window.location.assign(url.toString());
       },
-      async createProject(input) {
-        let id: string | null = null;
-        const ok = await commit((s) => {
-          const result = commands.createProject(s, ACTOR, input);
-          id = result.id;
+      async saveProject(id, input, team) {
+        let savedId: string | null = null;
+        const ok = await commit((s, actor) => {
+          const result = commands.saveProject(s, actor, { id, input, team });
+          savedId = result.id;
           return result.changes;
-        }, "Projekt utworzony");
-        return ok ? id : null;
+        }, id ? "Zmiany zapisane" : "Projekt utworzony");
+        return ok ? savedId : null;
       },
-      updateProject: (id, input) => commit((s) => commands.updateProject(s, ACTOR, id, input), "Zmiany zapisane"),
-      addMember: (projectId, employeeId) =>
-        commit((s) => commands.addMember(s, ACTOR, projectId, employeeId), "Dodano do zespołu"),
-      removeMember: (assignmentId) =>
-        commit((s) => commands.removeMember(s, ACTOR, assignmentId), "Usunięto z zespołu"),
-      moveMember: (employeeId, toProjectId) =>
-        commit((s) => commands.moveMember(s, ACTOR, employeeId, toProjectId), "Przeniesiono do zespołu"),
-      loadTestData: () => commit(() => commands.loadTestData(ACTOR), "Dane testowe wgrane"),
+      assignToProject: (employeeId, projectId) =>
+        commit((s, a) => commands.assignToProject(s, a, employeeId, projectId, todayISO()), "Przypisano do projektu"),
+      submitHours: (args) => commit((s, a) => commands.submitHours(s, a, args), "Godziny wysłane do zatwierdzenia"),
+      reportAbsence: (args) => commit((s, a) => commands.reportAbsence(s, a, args), "Nieobecność zgłoszona"),
+      approve: (items) =>
+        commit((s, a) => commands.approve(s, a, items), items.length === 1 ? "Zatwierdzono" : `Zatwierdzono: ${items.length} poz.`),
+      reject: (items, reason) => commit((s, a) => commands.reject(s, a, items, reason), "Odrzucono, pracownik zobaczy powód"),
+      loadTestData: () => commit((_s, a) => commands.loadTestData(a, todayISO()), "Dane testowe wgrane"),
       async clearData() {
-        const ok = await commit((s) => commands.clearData(s, ACTOR), "Dane testowe usunięte");
+        const ok = await commit((s, a) => commands.clearData(s, a), "Dane testowe usunięte");
         if (ok && mode === "demo") resetDemoStorage();
         return ok;
       },
     }),
-    [mode, status, model, commit]
+    [mode, status, model, user, commit]
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
@@ -198,73 +220,123 @@ export function useModel(): Model {
   return model;
 }
 
+/** Zalogowana osoba. Dostępna tylko, gdy dane są wczytane. */
+export function useUser(): Employee {
+  const { user } = useData();
+  if (!user) throw new Error("Brak użytkownika");
+  return user;
+}
+
 const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, "pl", { numeric: true, sensitivity: "base" });
 
+const POSITION_ORDER: Employee["position"][] = ["SUPERVISOR", "TEAM_LEADER", "ELECTRICIAN", "MECHANIC"];
+
 export function buildModel(snapshot: Snapshot): Model {
   const employees = [...snapshot.employees].sort(byName);
-  const projects = [...snapshot.projects].sort((a, b) =>
-    a.number.localeCompare(b.number, "pl", { numeric: true })
-  );
+  const projects = [...snapshot.projects]
+    .map((p) => ({ ...p, projectManagerId: p.projectManagerId ?? null }))
+    .sort((a, b) => a.number.localeCompare(b.number, "pl", { numeric: true }));
+  // Zgodność wstecz: przypisania z wersji 0.2 miały pole `since` zamiast `from`.
+  const assignments = snapshot.assignments.map((a) => {
+    const legacy = a as Assignment & { since?: string };
+    return { ...a, from: a.from ?? legacy.since ?? "1970-01-01", to: a.to ?? null };
+  });
   const employeeById = new Map(employees.map((e) => [e.id, e]));
   const projectById = new Map(projects.map((p) => [p.id, p]));
-  const assignmentByEmployee = new Map<string, Assignment>();
-  const membersByProject = new Map<string, Assignment[]>();
-  for (const a of snapshot.assignments) {
-    assignmentByEmployee.set(a.employeeId, a);
-    const list = membersByProject.get(a.projectId) ?? [];
-    list.push(a);
-    membersByProject.set(a.projectId, list);
+  const assignmentsByProject = new Map<string, Assignment[]>();
+  const assignmentsByEmployee = new Map<string, Assignment[]>();
+  for (const a of assignments) {
+    assignmentsByProject.set(a.projectId, [...(assignmentsByProject.get(a.projectId) ?? []), a]);
+    assignmentsByEmployee.set(a.employeeId, [...(assignmentsByEmployee.get(a.employeeId) ?? []), a]);
   }
+  for (const list of assignmentsByEmployee.values()) list.sort((a, b) => a.from.localeCompare(b.from));
 
   const entries = new Map<string, Map<string, Map<string, DayEntry>>>();
+  const byEmployee = new Map<string, Map<ISODate, { projectId: string; entry: DayEntry }>>();
   for (const sheet of snapshot.timesheets) {
     let perProject = entries.get(sheet.projectId);
     if (!perProject) entries.set(sheet.projectId, (perProject = new Map()));
     for (const [employeeId, days] of Object.entries(sheet.days ?? {})) {
       let perPerson = perProject.get(employeeId);
       if (!perPerson) perProject.set(employeeId, (perPerson = new Map()));
-      for (const [date, entry] of Object.entries(days)) perPerson.set(date, entry);
+      let mine = byEmployee.get(employeeId);
+      if (!mine) byEmployee.set(employeeId, (mine = new Map()));
+      for (const [date, entry] of Object.entries(days ?? {})) {
+        if (!entry) continue;
+        perPerson.set(date, entry);
+        mine.set(date, { projectId: sheet.projectId, entry });
+      }
     }
   }
 
-  const teamCache = new Map<string, Team | null>();
-  const team = (projectId: string): Team | null => {
-    if (teamCache.has(projectId)) return teamCache.get(projectId)!;
+  const activeAssignment = (employeeId: string, date: ISODate) =>
+    (assignmentsByEmployee.get(employeeId) ?? []).find((a) => a.from <= date && (!a.to || a.to >= date));
+
+  const today = todayISO();
+  const team = (projectId: string, date: ISODate = today): Team | null => {
     const project = projectById.get(projectId);
     if (!project) return null;
-    const members = (membersByProject.get(projectId) ?? [])
+    const reference = project.startDate > date ? project.startDate : date;
+    const members = (assignmentsByProject.get(projectId) ?? [])
+      .filter((a) => a.from <= reference && (!a.to || a.to >= reference))
       .map((a) => employeeById.get(a.employeeId))
       .filter((e): e is Employee => Boolean(e))
       .sort(byName);
-    const result: Team = {
+    const pick = (id: string | null) => (id ? employeeById.get(id) ?? null : null);
+    return {
       project,
-      installationManager: project.installationManagerId ? employeeById.get(project.installationManagerId) ?? null : null,
-      supervisor: project.supervisorId ? employeeById.get(project.supervisorId) ?? null : null,
+      projectManager: pick(project.projectManagerId),
+      installationManager: pick(project.installationManagerId),
+      supervisor: pick(project.supervisorId),
       teamLeaders: members.filter((e) => e.position === "TEAM_LEADER"),
       electricians: members.filter((e) => e.position === "ELECTRICIAN"),
       mechanics: members.filter((e) => e.position === "MECHANIC"),
       members,
     };
-    teamCache.set(projectId, result);
-    return result;
+  };
+
+  const rows = (projectId: string, from: ISODate, to: ISODate): Row[] => {
+    const project = projectById.get(projectId);
+    if (!project) return [];
+    const map = new Map<string, Row>();
+    const sv = project.supervisorId ? employeeById.get(project.supervisorId) : undefined;
+    if (sv) map.set(sv.id, { employee: sv, periods: [{ from: project.startDate, to: project.endDate }] });
+    for (const a of assignmentsByProject.get(projectId) ?? []) {
+      if (a.from > to || (a.to && a.to < from)) continue;
+      const e = employeeById.get(a.employeeId);
+      if (!e) continue;
+      const row = map.get(e.id) ?? { employee: e, periods: [] };
+      row.periods.push({ from: a.from, to: a.to });
+      map.set(e.id, row);
+    }
+    return [...map.values()].sort(
+      (a, b) =>
+        POSITION_ORDER.indexOf(a.employee.position) - POSITION_ORDER.indexOf(b.employee.position) || byName(a.employee, b.employee)
+    );
   };
 
   return {
     snapshot,
     employees,
     projects,
+    assignments,
     employeeById,
     projectById,
-    assignmentByEmployee,
-    membersByProject,
+    assignmentsByProject,
+    assignmentsByEmployee,
     entries,
-    team,
     entry: (projectId, employeeId, date) => entries.get(projectId)?.get(employeeId)?.get(date),
-    projectsOf(employeeId) {
-      const assigned = assignmentByEmployee.get(employeeId);
-      if (assigned) return [projectById.get(assigned.projectId)].filter((p): p is Project => Boolean(p));
-      return projects.filter((p) => p.supervisorId === employeeId || p.installationManagerId === employeeId);
+    entriesOf: (employeeId) => byEmployee.get(employeeId) ?? new Map(),
+    activeAssignment,
+    team,
+    rows,
+    projectsOf(employeeId, date = today) {
+      const a = activeAssignment(employeeId, date);
+      if (a) return [projectById.get(a.projectId)].filter((p): p is Project => Boolean(p));
+      return projects.filter(
+        (p) => p.supervisorId === employeeId || p.installationManagerId === employeeId || p.projectManagerId === employeeId
+      );
     },
   };
 }

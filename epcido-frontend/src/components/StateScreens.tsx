@@ -51,13 +51,37 @@ export function DataGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const version = data.model.snapshot.seedVersion;
+  if (data.model.snapshot.seeded && version !== null && version < 3) {
+    return (
+      <section className="gate">
+        <h2>Dane testowe są ze starszej wersji</h2>
+        <p>
+          Nowa wersja ma okresy pracy od–do, wysyłkę do Dataverse i Project Managerów. Usuń stare dane testowe i wgraj
+          nowe — dziennik zmian zostanie.
+        </p>
+        <div className="gate__actions">
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={async () => {
+              if (await data.clearData()) await data.loadTestData();
+            }}
+          >
+            Usuń i wgraj nowe dane testowe
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   if (!data.model.snapshot.seeded && data.model.projects.length === 0) {
     return (
       <section className="gate">
         <h2>Baza jest pusta</h2>
         <p>
           Wgraj dane testowe: 50 elektryków, 50 mechaników, 20 Team Leaderów, 10 supervisorów, 4 Installation Managerów,
-          10 projektów i godziny z ostatnich 10 tygodni.
+          3 Project Managerów, 10 projektów i godziny z ostatnich 10 tygodni.
         </p>
         <div className="gate__actions">
           <button type="button" className="btn btn--primary" onClick={() => data.loadTestData()}>

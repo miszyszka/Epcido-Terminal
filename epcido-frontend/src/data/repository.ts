@@ -14,6 +14,11 @@ export interface Write {
   id: string;
   /** null = usunięcie dokumentu */
   data: Record<string, unknown> | null;
+  /**
+   * true = scal z istniejącym dokumentem (zagnieżdżone pola też). Używane przy kartach tygodnia,
+   * żeby zapis jednego dnia jednej osoby nie nadpisał dni innych osób zapisywanych w tym samym czasie.
+   */
+  merge?: boolean;
 }
 
 export interface ChangeSet {
@@ -25,6 +30,8 @@ export interface ChangeSet {
 export interface Snapshot extends Dataset {
   audit: AuditEvent[];
   seeded: boolean;
+  /** Wersja wgranych danych testowych (meta/seed.version) */
+  seedVersion: number | null;
 }
 
 export interface RepoError {

@@ -1,246 +1,75 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { useModel, type Model } from "../../app/DataContext";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
-import { DayCell } from "../../components/DayCell";
 import { Legend } from "../../components/Legend";
 import { PageHeader } from "../../components/PageHeader";
-import { PositionMark, ProjectDot } from "../../components/PersonBadge";
 import { WeekNav } from "../../components/WeekNav";
-import { describeProjectDay, projectDay, teamPeopleIds } from "../../domain/aggregate";
-import { dayStateOf, PROJECT_STATUS_LABEL } from "../../domain/labels";
-import type { Project } from "../../domain/types";
-import {
-  addDays,
-  formatDate,
-  formatDay,
-  MONTHS_SHORT,
-  parseISO,
-  startOfWeek,
-  todayISO,
-  WEEKDAYS_SHORT,
-  type ISODate,
-} from "../../lib/dates";
-import { cityOf, searchProjects } from "../../lib/search";
-import { absences, people as peopleCount } from "../../lib/text";
+import { visibleProjects } from "../../domain/permissions";
+import { addDays, eachDay, startOfWeek, todayISO } from "../../lib/dates";
+import { searchProjects } from "../../lib/search";
+import { ProjectCard } from "../grid/ProjectCard";
 
-const WEEKS = 12;
-const WEEKS_BACK = 9;
+const COL = 20; // szerokość kolumny dnia (--col-map)
+const NAME_COL = 188;
 
-/** Mapa wszystkich projektów: każdy projekt jako siatka 7 dni × 12 tygodni. */
+/** Ile tygodni zmieści się w szerokości strony (3–10). */
+function useWeeksThatFit() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [weeks, setWeeks] = useState(8);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const width = el.clientWidth - 64; // wewnętrzne marginesy karty
+      setWeeks(Math.max(3, Math.min(10, Math.floor((width - NAME_COL) / (7 * COL)))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, weeks };
+}
+
+/** Mapa: wszystkie widoczne projekty, w każdym ludzie w wierszach i dni w kolumnach (8 tygodni). */
 export function MapView() {
   const model = useModel();
+  const user = useUser();
   const { search } = useUi();
   const today = todayISO();
   const currentWeek = startOfWeek(today);
   const [offset, setOffset] = useState(0);
-  const from = addDays(currentWeek, (offset - WEEKS_BACK) * 7);
-  const weeks = useMemo(() => Array.from({ length: WEEKS }, (_, i) => addDays(from, i * 7)), [from]);
+  const { ref, weeks: WEEKS } = useWeeksThatFit();
+  // bieżący tydzień i jeden następny zawsze widoczne, reszta wstecz
+  const from = addDays(currentWeek, (offset - (WEEKS - 2)) * 7);
+  const days = useMemo(() => eachDay(from, addDays(from, WEEKS * 7 - 1)), [from, WEEKS]);
 
-  const matches = searchProjects(model, search);
-  const summary = useMemo(() => summarize(model, today, currentWeek), [model, today, currentWeek]);
-  const active = model.projects.filter((p) => p.status === "ACTIVE").length;
+  const allowed = new Set(visibleProjects(model, user).map((p) => p.id));
+  const matches = searchProjects(model, search).filter((m) => allowed.has(m.project.id));
 
   return (
-    <div className="page">
+    <div className="page" ref={ref}>
       <PageHeader
         title="Plan projektów"
-        description={`Projekty w realizacji: ${active}. W zespołach: ${peopleCount(summary.people)}. Kliknij siatkę projektu, żeby zobaczyć dni każdej osoby.`}
+        description="Każdy wiersz to osoba, każda kolumna to dzień. Kliknij nazwę projektu, żeby otworzyć jego plan."
         actions={
-          <WeekNav
-            from={from}
-            weeks={WEEKS}
-            onShift={(d) => setOffset((o) => o + d)}
-            onToday={() => setOffset(0)}
-            isCurrent={offset === 0}
-          />
+          <WeekNav from={from} weeks={WEEKS} onShift={(d) => setOffset((o) => o + d)} onToday={() => setOffset(0)} isCurrent={offset === 0} />
         }
       />
-
       <div className="map-bar">
         <Legend />
-        <div className="map-bar__attention">
-          {summary.pending > 0 ? (
-            <p className="attn">
-              <DayCell state="pending" size="mini" label="Czeka na zatwierdzenie" />
-              <span>
-                Czeka na zatwierdzenie: <strong>{summary.pending}</strong> dni pracy
-                {summary.overdue > 0 && (
-                  <>
-                    , w tym <strong>{summary.overdue}</strong> sprzed tego tygodnia
-                  </>
-                )}
-              </span>
-            </p>
-          ) : (
-            <p className="attn">Wszystkie wpisane dni są zatwierdzone.</p>
-          )}
-          {summary.absentToday > 0 && (
-            <p className="attn">
-              <DayCell state="absent" size="mini" label="Nieobecni dziś" />
-              <span>
-                Dziś nieobecnych: <strong>{summary.absentToday}</strong>
-              </span>
-            </p>
-          )}
-        </div>
       </div>
-
       {matches.length === 0 ? (
         <div className="empty">
-          <p>Żaden projekt ani osoba nie pasuje do „{search}".</p>
+          <p>{search ? `Żaden projekt ani osoba nie pasuje do „${search}".` : "Nie masz jeszcze żadnych projektów."}</p>
         </div>
       ) : (
-        <div className="tiles">
-          {matches.map(({ project }) => (
-            <ProjectTile key={project.id} project={project} weeks={weeks} today={today} />
+        <div className="pcards">
+          {matches.map(({ project, people }) => (
+            <ProjectCard key={project.id} project={project} days={days} today={today} variant="compact" only={people} />
           ))}
         </div>
       )}
     </div>
   );
-}
-
-function ProjectTile({ project, weeks, today }: { project: Project; weeks: ISODate[]; today: ISODate }) {
-  const model = useModel();
-  const { openProject } = useUi();
-  const team = model.team(project.id)!;
-
-  const { cells, pending, absent } = useMemo(() => {
-    const people = teamPeopleIds(model.team(project.id)!);
-    let pending = 0;
-    let absent = 0;
-    const cells: { date: ISODate; week: number; day: ReturnType<typeof projectDay> }[] = [];
-    for (let d = 0; d < 7; d++) {
-      weeks.forEach((weekStart, w) => {
-        const date = addDays(weekStart, d);
-        const day = projectDay(model, project.id, people, date);
-        pending += day.pending;
-        absent += day.absent;
-        cells.push({ date, week: w, day });
-      });
-    }
-    return { cells, pending, absent };
-  }, [model, project.id, weeks]);
-
-  const headcount = team.members.length + (team.supervisor ? 1 : 0);
-  const planned = project.status === "PLANNED";
-
-  return (
-    <article className="tile">
-      <header className="tile__head">
-        <button type="button" className="tile__title" onClick={() => openProject(project.id)}>
-          <ProjectDot color={project.color} />
-          <span>{project.name}</span>
-        </button>
-        <span className="tile__number">{project.number}</span>
-      </header>
-      <p className="tile__meta">
-        {project.customerName}, {cityOf(project)}
-      </p>
-      <p className="tile__lead">
-        {team.supervisor ? (
-          <>
-            <PositionMark employee={team.supervisor} />
-            {team.supervisor.name}
-          </>
-        ) : (
-          <span className="muted">Bez supervisora</span>
-        )}
-      </p>
-
-      <Link
-        to={`/os-czasu?projekt=${project.id}`}
-        className="matrix"
-        aria-label={`${project.name}: otwórz dni zespołu na osi czasu`}
-        style={{ gridTemplateColumns: `22px repeat(${weeks.length}, var(--cell-map))` }}
-      >
-        <span className="matrix__corner" />
-        {monthLabels(weeks).map((label, i) => (
-          <span key={weeks[i]} className="matrix__month">
-            {label}
-          </span>
-        ))}
-        {WEEKDAYS_SHORT.map((label, row) => (
-          <Row key={label} label={label} row={row} cells={cells} today={today} project={project} />
-        ))}
-      </Link>
-
-      <footer className="tile__foot">
-        {planned ? (
-          <span>
-            {PROJECT_STATUS_LABEL.PLANNED}, start {formatDate(project.startDate)}
-          </span>
-        ) : (
-          <>
-            <span>{peopleCount(headcount)}</span>
-            {pending > 0 && <span className="badge badge--pending">{pending} czeka</span>}
-            {absent > 0 && <span className="badge badge--absent">{absences(absent)}</span>}
-          </>
-        )}
-      </footer>
-    </article>
-  );
-}
-
-function Row({
-  label,
-  row,
-  cells,
-  today,
-  project,
-}: {
-  label: string;
-  row: number;
-  cells: { date: ISODate; week: number; day: ReturnType<typeof projectDay> }[];
-  today: ISODate;
-  project: Project;
-}) {
-  const rowCells = cells.slice(row * (cells.length / 7), (row + 1) * (cells.length / 7));
-  return (
-    <>
-      <span className="matrix__dow">{row % 2 === 0 ? label : ""}</span>
-      {rowCells.map(({ date, week, day }) => (
-        <DayCell
-          key={date}
-          state={day.state}
-          flag={day.hasAbsence}
-          today={date === today}
-          future={date > today}
-          label={`${project.name}, ${formatDay(date)}\n${describeProjectDay(day)}`}
-          style={{ "--i": week } as React.CSSProperties}
-        />
-      ))}
-    </>
-  );
-}
-
-/** Nazwa miesiąca nad tygodniem, w którym zaczyna się miesiąc (i nad pierwszą kolumną). */
-function monthLabels(weeks: ISODate[]): string[] {
-  const startsMonth = weeks.map((w) => {
-    const mon = parseISO(w);
-    const sun = parseISO(addDays(w, 6));
-    if (mon.getDate() === 1) return MONTHS_SHORT[mon.getMonth()];
-    return sun.getMonth() !== mon.getMonth() ? MONTHS_SHORT[sun.getMonth()] : "";
-  });
-  if (!startsMonth[0] && !startsMonth[1]) startsMonth[0] = MONTHS_SHORT[parseISO(weeks[0]).getMonth()];
-  return startsMonth;
-}
-
-function summarize(model: Model, today: ISODate, currentWeek: ISODate) {
-  let pending = 0;
-  let overdue = 0;
-  let absentToday = 0;
-  for (const [, perPerson] of model.entries) {
-    for (const [, days] of perPerson) {
-      for (const [date, entry] of days) {
-        const s = dayStateOf(entry);
-        if (s === "pending") {
-          pending++;
-          if (date < currentWeek) overdue++;
-        } else if (s === "absent" && date === today) absentToday++;
-      }
-    }
-  }
-  return { pending, overdue, absentToday, people: model.assignmentByEmployee.size };
 }

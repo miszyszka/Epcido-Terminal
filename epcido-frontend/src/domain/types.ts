@@ -3,10 +3,18 @@
 
 import type { ISODate } from "../lib/dates";
 
-export type AccessRole = "ADMIN" | "PLANNING" | "INSTALLATION_MANAGER" | "SUPERVISOR" | "WORKER";
+export type AccessRole =
+  | "ADMIN"
+  | "PLANNING"
+  | "PROJECT_MANAGER"
+  | "INSTALLATION_MANAGER"
+  | "SUPERVISOR"
+  | "WORKER";
 
 export type Position =
+  | "ADMIN"
   | "PLANNER"
+  | "PROJECT_MANAGER"
   | "INSTALLATION_MANAGER"
   | "SUPERVISOR"
   | "TEAM_LEADER"
@@ -43,6 +51,7 @@ export interface Project {
   startDate: ISODate;
   endDate: ISODate | null;
   status: ProjectStatus;
+  projectManagerId: string | null;
   installationManagerId: string | null;
   supervisorId: string | null;
   /** Pola integracyjne — zmiana wpływa na połączenie z Business Central */
@@ -54,26 +63,42 @@ export interface Project {
 
 export type ProjectInput = Omit<Project, "id" | "createdAt" | "updatedAt">;
 
-/** Przypisanie osoby (TL, elektryk, mechanik) do projektu. Supervisor i IM są w samym projekcie. */
+/**
+ * Przypisanie osoby (TL, elektryk, mechanik) do projektu na okres od–do.
+ * Ta sama osoba może mieć kolejne przypisania w różnych projektach.
+ * Supervisor, IM i PM są wskazani w samym projekcie.
+ */
 export interface Assignment {
   id: string;
   projectId: string;
   employeeId: string;
-  since: ISODate;
+  from: ISODate;
+  /** null = do końca projektu */
+  to: ISODate | null;
 }
 
 export type EntryStatus = "SUBMITTED" | "SUPERVISOR_APPROVED" | "PM_APPROVED" | "REJECTED";
 export type EntryKind = "WORK" | "ABSENCE";
-export type AbsenceType = "SICK" | "LEAVE";
+export type AbsenceType = "SICK" | "LEAVE" | "OTHER";
 
 /** Jeden dzień jednej osoby. Godziny w minutach od północy — jak w API Gantbee. */
 export interface DayEntry {
   kind: EntryKind;
   status: EntryStatus;
-  start?: number;
-  end?: number;
-  breakMin?: number;
-  absence?: AbsenceType;
+  start?: number | null;
+  end?: number | null;
+  breakMin?: number | null;
+  absence?: AbsenceType | null;
+  note?: string | null;
+  submittedAt?: string | null;
+  rejectionReason?: string | null;
+  svApprovedBy?: string | null;
+  svApprovedAt?: string | null;
+  finalApprovedBy?: string | null;
+  finalApprovedAt?: string | null;
+  /** Wysłane do Dataverse (wtorek 23:00) */
+  exported?: boolean;
+  exportedAt?: string | null;
 }
 
 /** Karta tygodnia projektu: id = `${projectId}_${weekStart}` */
@@ -88,9 +113,12 @@ export interface Timesheet {
 export type AuditAction =
   | "PROJECT_CREATED"
   | "PROJECT_UPDATED"
-  | "MEMBER_ADDED"
-  | "MEMBER_REMOVED"
-  | "MEMBER_MOVED"
+  | "TEAM_PLANNED"
+  | "MEMBER_ASSIGNED"
+  | "HOURS_SUBMITTED"
+  | "ABSENCE_REPORTED"
+  | "HOURS_APPROVED"
+  | "HOURS_REJECTED"
   | "TEST_DATA_LOADED"
   | "TEST_DATA_CLEARED";
 

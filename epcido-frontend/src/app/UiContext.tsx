@@ -1,11 +1,8 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 
-export type DrawerState =
-  | { kind: "new" }
-  | { kind: "project"; projectId: string; tab: ProjectTab }
-  | null;
-
-export type ProjectTab = "team" | "details" | "history";
+/** Edytor projektu na pełnym ekranie: null = zamknięty, projectId null = nowy projekt. */
+export type EditorState = { projectId: string | null; tab: EditorTab; rev: number } | null;
+export type EditorTab = "team" | "history";
 
 export interface Toast {
   id: number;
@@ -16,10 +13,10 @@ export interface Toast {
 interface UiValue {
   search: string;
   setSearch: (value: string) => void;
-  drawer: DrawerState;
+  editor: EditorState;
   openNewProject: () => void;
-  openProject: (projectId: string, tab?: ProjectTab) => void;
-  closeDrawer: () => void;
+  openProject: (projectId: string, tab?: EditorTab) => void;
+  closeEditor: () => void;
   toasts: Toast[];
   toast: (message: string, tone?: Toast["tone"]) => void;
 }
@@ -28,7 +25,7 @@ const UiContext = createContext<UiValue | null>(null);
 
 export function UiProvider({ children }: { children: ReactNode }) {
   const [search, setSearch] = useState("");
-  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [editor, setEditor] = useState<EditorState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
 
@@ -38,16 +35,16 @@ export function UiProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === "error" ? 7000 : 3200);
   }, []);
 
-  const openNewProject = useCallback(() => setDrawer({ kind: "new" }), []);
+  const openNewProject = useCallback(() => setEditor({ projectId: null, tab: "team", rev: Date.now() }), []);
   const openProject = useCallback(
-    (projectId: string, tab: ProjectTab = "team") => setDrawer({ kind: "project", projectId, tab }),
+    (projectId: string, tab: EditorTab = "team") => setEditor({ projectId, tab, rev: Date.now() }),
     []
   );
-  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const closeEditor = useCallback(() => setEditor(null), []);
 
   const value = useMemo<UiValue>(
-    () => ({ search, setSearch, drawer, openNewProject, openProject, closeDrawer, toasts, toast }),
-    [search, drawer, openNewProject, openProject, closeDrawer, toasts, toast]
+    () => ({ search, setSearch, editor, openNewProject, openProject, closeEditor, toasts, toast }),
+    [search, editor, openNewProject, openProject, closeEditor, toasts, toast]
   );
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;

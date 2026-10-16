@@ -22,9 +22,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-body.has-drawer {
-  overflow: hidden;
-}
 
 h1,
 h2,
@@ -78,9 +75,65 @@ a {
   color: var(--ink-2);
 }
 
-/* Układ: bez górnego paska, treść do lewej, zapas na dock */
+/* Układ: panel roboczy + ramka aplikacji (desktop albo telefon) */
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  overflow: hidden;
+}
+.layout {
+  display: flex;
+  height: 100dvh;
+}
+.stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.stage--mobile {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 40%, rgb(255 255 255 / 0.7), transparent 60%),
+    var(--ground);
+}
+.app-frame {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  /* transform: elementy fixed (dock, edytor, komunikaty) liczą się względem ramki, nie okna */
+  transform: translateZ(0);
+  background: var(--ground);
+}
+.app-scroll {
+  height: 100%;
+  overflow: auto;
+  container: app / inline-size;
+  overscroll-behavior: contain;
+}
+.device {
+  display: flex;
+  width: 390px;
+  height: min(844px, calc(100dvh - 48px));
+  padding: 10px;
+  border-radius: 54px;
+  background: #0f1a19;
+  box-shadow:
+    0 40px 80px -24px rgb(15 61 58 / 0.45),
+    inset 0 0 0 1.5px rgb(255 255 255 / 0.08);
+}
+.device .app-frame {
+  border-radius: 44px;
+}
 .shell {
-  min-height: 100dvh;
+  min-height: 100%;
 }
 
 .shell__main {

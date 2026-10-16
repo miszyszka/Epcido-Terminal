@@ -35,6 +35,7 @@ export function createFirestoreRepository(): Repository {
       const parts: Partial<Record<CollectionName, unknown[]>> = {};
       let audit: AuditEvent[] | null = null;
       let seeded: boolean | null = null;
+      let seedVersion: number | null = null;
 
       const emit = () => {
         if (COLLECTIONS.some((c) => !parts[c]) || audit === null || seeded === null) return;
@@ -45,6 +46,7 @@ export function createFirestoreRepository(): Repository {
           timesheets: parts.timesheets,
           audit,
           seeded,
+          seedVersion,
         } as Snapshot);
       };
       const fail = (e: FirestoreError) => onError(toRepoError(e));
@@ -72,6 +74,7 @@ export function createFirestoreRepository(): Repository {
           doc(db, "meta", "seed"),
           (snap) => {
             seeded = snap.exists();
+            seedVersion = snap.exists() ? Number(snap.data()?.version ?? 1) : null;
             emit();
           },
           fail
@@ -84,13 +87,18 @@ export function createFirestoreRepository(): Repository {
       // Zmiana + jej wpis w dzienniku idą w tym samym batchu (atomowo).
       // Tylko duże operacje (wgranie danych testowych) są dzielone na kilka batchy.
       const ops = [
-        ...changes.writes.map((w) => ({ ref: doc(db, w.collection, w.id), data: w.data })),
-        ...changes.audit.map((a) => ({ ref: doc(db, "auditLog", a.id), data: a as unknown as Record<string, unknown> })),
+        ...changes.writes.map((w) => ({ ref: doc(db, w.collection, w.id), data: w.data, merge: w.merge })),
+        ...changes.audit.map((a) => ({
+          ref: doc(db, "auditLog", a.id),
+          data: a as unknown as Record<string, unknown>,
+          merge: false,
+        })),
       ];
       for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
         const batch = writeBatch(db);
         for (const op of ops.slice(i, i + BATCH_LIMIT)) {
           if (op.data === null) batch.delete(op.ref);
+          else if (op.merge) batch.set(op.ref, op.data, { merge: true });
           else batch.set(op.ref, op.data);
         }
         await batch.commit();
