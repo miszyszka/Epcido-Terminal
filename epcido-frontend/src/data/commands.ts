@@ -2,13 +2,23 @@
 // Walidacja biznesowa jest tutaj, a nie w ekranach.
 
 import { newId } from "../lib/random";
-import { addDays, eachDay, formatDate, formatDay, formatMinutes, startOfWeek, weekdayIndex, type ISODate } from "../lib/dates";
-import { ABSENCE_LABEL, PROJECT_STATUS_LABEL, formatHoursTotal, workedMinutes } from "../domain/labels";
-import { approvedStatus, type QueueItem } from "../domain/workflow";
-import type { AbsenceType, Assignment, AuditAction, AuditEvent, DayEntry, Project, ProjectInput } from "../domain/types";
+import { addDays, eachDay, formatDate, formatDay, startOfWeek, weekdayIndex, type ISODate } from "../lib/dates";
+import { ABSENCE_LABEL, defaultTask, PROJECT_STATUS_LABEL } from "../domain/labels";
+import { approvedStatus, countTimesheets, describeHours, isLocked, type QueueItem, type QueueLevel } from "../domain/workflow";
+import type {
+  AbsenceType,
+  Assignment,
+  AuditAction,
+  AuditEvent,
+  DayEntry,
+  EntryChange,
+  EntryKind,
+  Project,
+  ProjectInput,
+} from "../domain/types";
 import type { ChangeSet, Snapshot, Write } from "./repository";
 import { generateDataset, SEED_VERSION } from "./seed";
-import { plural } from "../lib/text";
+import { daysCount, plural } from "../lib/text";
 
 export interface Actor {
   id: string;
@@ -24,6 +34,7 @@ export interface DraftAssignment {
   employeeId: string;
   from: ISODate;
   to: ISODate | null;
+  task?: string | null;
 }
 
 function audit(
@@ -50,7 +61,7 @@ const FIELD_LABELS: Partial<Record<keyof ProjectInput, string>> = {
   name: "Nazwa",
   customerName: "Klient",
   customerOrderNo: "Nr zamówienia klienta",
-  siteAddress: "Adres budowy",
+  siteAddress: "Adres projektu",
   country: "Kraj",
   branch: "Oddział",
   color: "Kolor",
@@ -60,6 +71,8 @@ const FIELD_LABELS: Partial<Record<keyof ProjectInput, string>> = {
   projectManagerId: "Project Manager",
   installationManagerId: "Installation Manager",
   supervisorId: "Supervisor",
+  needElectricians: "Zapotrzebowanie: elektrycy",
+  needMechanics: "Zapotrzebowanie: mechanicy",
   dataverseId: "Dataverse Id",
   dataverseNumber: "Dataverse Number",
 };
@@ -77,6 +90,10 @@ export function validateProject(input: ProjectInput, snapshot: Snapshot, editing
   if (input.endDate && input.startDate && input.endDate < input.startDate) errors.endDate = "Koniec nie może być przed startem.";
   if (!input.installationManagerId) errors.installationManagerId = "Wybierz Installation Managera.";
   if (!input.branch) errors.branch = "Wybierz oddział.";
+  for (const key of ["needElectricians", "needMechanics"] as const) {
+    const v = input[key];
+    if (v != null && (!Number.isInteger(v) || v < 0 || v > 500)) errors[key] = "Podaj liczbę osób od 0 do 500.";
+  }
   return errors;
 }
 
@@ -104,7 +121,20 @@ export function saveProject(
   const errors = validateProject(args.input, snapshot, args.id);
   if (Object.keys(errors).length) throw new CommandError(Object.values(errors)[0]);
   for (const d of args.team) {
-    if (d.to && d.to < d.from) throw new CommandError("Okres pracy kończy się przed startem.");
+    if (d.to && d.to < d.from) throw new CommandError("Zadanie kończy się przed startem.");
+  }
+  // Zadania jednej osoby w projekcie nie mogą na siebie nachodzić
+  const byPerson = new Map<string, DraftAssignment[]>();
+  args.team.forEach((d) => byPerson.set(d.employeeId, [...(byPerson.get(d.employeeId) ?? []), d]));
+  for (const [employeeId, list] of byPerson) {
+    const sorted = [...list].sort((a, b) => a.from.localeCompare(b.from));
+    for (let i = 1; i < sorted.length; i++) {
+      const prevEnd = sorted[i - 1].to ?? "9999-12-31";
+      if (sorted[i].from <= prevEnd) {
+        const who = snapshot.employees.find((e) => e.id === employeeId)?.name ?? "Osoba";
+        throw new CommandError(`${who}: zadania nachodzą na siebie (${formatDate(sorted[i].from)}). Przesuń jedno z nich.`);
+      }
+    }
   }
 
   const now = new Date().toISOString();
@@ -136,23 +166,35 @@ export function saveProject(
 
   // Plan zespołu: porównanie z tym, co jest zapisane
   const name = (employeeId: string) => snapshot.employees.find((e) => e.id === employeeId)?.name ?? "osoba";
-  const range = (from: ISODate, to: ISODate | null) => `${formatDate(from)} – ${to ? formatDate(to) : "koniec projektu"}`;
+  const range = (from: ISODate, to: ISODate | null, task?: string | null) =>
+    `${task ? `${task}: ` : ""}${formatDate(from)} – ${to ? formatDate(to) : "koniec projektu"}`;
   const existing = snapshot.assignments.filter((a) => a.projectId === id);
   const teamChanges: { field: string; before: string; after: string }[] = [];
   for (const old of existing) {
     const draft = args.team.find((d) => d.id === old.id);
     if (!draft) {
       writes.push({ collection: "assignments", id: old.id, data: null });
-      teamChanges.push({ field: name(old.employeeId), before: range(old.from, old.to), after: "usunięty z planu" });
-    } else if (draft.from !== old.from || (draft.to ?? null) !== (old.to ?? null)) {
-      writes.push({ collection: "assignments", id: old.id, data: strip({ ...old, from: draft.from, to: draft.to }) });
-      teamChanges.push({ field: name(old.employeeId), before: range(old.from, old.to), after: range(draft.from, draft.to) });
+      teamChanges.push({ field: name(old.employeeId), before: range(old.from, old.to, old.task), after: "zadanie usunięte" });
+    } else if (draft.from !== old.from || (draft.to ?? null) !== (old.to ?? null) || (draft.task ?? null) !== (old.task ?? null)) {
+      writes.push({ collection: "assignments", id: old.id, data: strip({ ...old, from: draft.from, to: draft.to, task: draft.task ?? null }) });
+      teamChanges.push({
+        field: name(old.employeeId),
+        before: range(old.from, old.to, old.task),
+        after: range(draft.from, draft.to, draft.task),
+      });
     }
   }
   for (const draft of args.team.filter((d) => !d.id)) {
-    const a: Assignment = { id: newId("a"), projectId: id, employeeId: draft.employeeId, from: draft.from, to: draft.to };
+    const a: Assignment = {
+      id: newId("a"),
+      projectId: id,
+      employeeId: draft.employeeId,
+      from: draft.from,
+      to: draft.to,
+      task: draft.task ?? null,
+    };
     writes.push({ collection: "assignments", id: a.id, data: strip(a) });
-    teamChanges.push({ field: name(draft.employeeId), before: "—", after: range(draft.from, draft.to) });
+    teamChanges.push({ field: name(draft.employeeId), before: "—", after: range(draft.from, draft.to, draft.task) });
   }
   if (teamChanges.length) {
     events.push(audit(actor, "TEAM_PLANNED", id, `Zmieniono plan zespołu ${next.name}: ${teamChanges.length} ${plural(teamChanges.length, "zmiana", "zmiany", "zmian")}`, teamChanges));
@@ -173,11 +215,83 @@ export function assignToProject(snapshot: Snapshot, actor: Actor, employeeId: st
     const end = addDays(from, -1);
     writes.push(end < a.from ? { collection: "assignments", id: a.id, data: null } : { collection: "assignments", id: a.id, data: strip({ ...a, to: end }) });
   }
-  const a: Assignment = { id: newId("a"), projectId, employeeId, from, to: project.endDate };
+  const a: Assignment = { id: newId("a"), projectId, employeeId, from, to: project.endDate, task: defaultTask(employee.trade) };
   writes.push({ collection: "assignments", id: a.id, data: strip(a) });
   return {
     writes,
     audit: [audit(actor, "MEMBER_ASSIGNED", projectId, `Przypisano ${employee.name} do ${project.name} od ${formatDate(from)}`)],
+  };
+}
+
+/**
+ * Obsada: nowe zadanie osoby w projekcie od–do (zwykle po przerwie na wyjazd do domu).
+ * Nie może nachodzić na inne zadania tej osoby.
+ */
+export function planAssignment(
+  snapshot: Snapshot,
+  actor: Actor,
+  args: { employeeId: string; projectId: string; from: ISODate; to: ISODate | null; task: string; breakDays?: number }
+): ChangeSet {
+  const project = snapshot.projects.find((p) => p.id === args.projectId);
+  const employee = snapshot.employees.find((e) => e.id === args.employeeId);
+  if (!project || !employee) throw new CommandError("Nie znaleziono projektu lub osoby.");
+  if (args.to && args.to < args.from) throw new CommandError("Zadanie kończy się przed startem.");
+  if (project.endDate && args.from > project.endDate) throw new CommandError(`${project.name} kończy się ${formatDate(project.endDate)}.`);
+  const to = args.to ?? project.endDate;
+  const clash = snapshot.assignments.find((a) => {
+    if (a.employeeId !== args.employeeId) return false;
+    const end = a.to ?? snapshot.projects.find((p) => p.id === a.projectId)?.endDate ?? "9999-12-31";
+    return a.from <= (to ?? "9999-12-31") && end >= args.from;
+  });
+  if (clash) {
+    const p = snapshot.projects.find((x) => x.id === clash.projectId);
+    throw new CommandError(`${employee.name} ma już zadanie w ${p?.name ?? "innym projekcie"} w tym czasie.`);
+  }
+  const a: Assignment = { id: newId("a"), projectId: project.id, employeeId: employee.id, from: args.from, to, task: args.task.trim() || defaultTask(employee.trade) };
+  const pause = args.breakDays ? `, wcześniej przerwa ${daysCount(args.breakDays)}` : "";
+  return {
+    writes: [{ collection: "assignments", id: a.id, data: strip(a) }],
+    audit: [
+      audit(
+        actor,
+        "MEMBER_ASSIGNED",
+        project.id,
+        `Zaplanowano ${employee.name} w ${project.name}: ${a.task}, ${formatDate(a.from)} – ${to ? formatDate(to) : "koniec projektu"}${pause}`
+      ),
+    ],
+  };
+}
+
+/** Obsada: przerwa w trakcie zadania (np. wyjazd do domu) — zadanie dzieli się na dwa, w przerwie nie ma wpisu godzin. */
+export function insertBreak(
+  snapshot: Snapshot,
+  actor: Actor,
+  args: { assignmentId: string; from: ISODate; days: number }
+): ChangeSet {
+  const a = snapshot.assignments.find((x) => x.id === args.assignmentId);
+  if (!a) throw new CommandError("Nie znaleziono zadania.");
+  const project = snapshot.projects.find((p) => p.id === a.projectId);
+  const employee = snapshot.employees.find((e) => e.id === a.employeeId);
+  const end = a.to ?? project?.endDate ?? null;
+  if (args.days < 1) throw new CommandError("Przerwa musi trwać co najmniej dzień.");
+  if (args.from <= a.from) throw new CommandError("Przerwa musi zaczynać się po starcie zadania.");
+  if (end && args.from > end) throw new CommandError("Przerwa musi zaczynać się przed końcem zadania.");
+  const back = addDays(args.from, args.days);
+  const writes: Write[] = [{ collection: "assignments", id: a.id, data: strip({ ...a, to: addDays(args.from, -1) }) }];
+  if (!end || back <= end) {
+    const rest: Assignment = { id: newId("a"), projectId: a.projectId, employeeId: a.employeeId, from: back, to: a.to, task: a.task ?? null };
+    writes.push({ collection: "assignments", id: rest.id, data: strip(rest) });
+  }
+  return {
+    writes,
+    audit: [
+      audit(
+        actor,
+        "TEAM_PLANNED",
+        a.projectId,
+        `Przerwa: ${employee?.name ?? a.employeeId} w ${project?.name ?? a.projectId}, ${formatDate(args.from)} – ${formatDate(addDays(back, -1))} (${daysCount(args.days)})`
+      ),
+    ],
   };
 }
 
@@ -205,7 +319,7 @@ function entryWrites(items: { projectId: string; employeeId: string; date: ISODa
   return [...docs.values()];
 }
 
-/** Pełny wpis z jawnymi null — scalanie nie zostawia starych pól (np. powodu odrzucenia). */
+/** Pełny wpis z jawnymi null — scalanie nie zostawia starych pól. */
 function normalizeEntry(e: DayEntry): DayEntry {
   return {
     kind: e.kind,
@@ -216,14 +330,18 @@ function normalizeEntry(e: DayEntry): DayEntry {
     absence: e.absence ?? null,
     note: e.note ?? null,
     submittedAt: e.submittedAt ?? null,
-    rejectionReason: e.rejectionReason ?? null,
     svApprovedBy: e.svApprovedBy ?? null,
     svApprovedAt: e.svApprovedAt ?? null,
     finalApprovedBy: e.finalApprovedBy ?? null,
     finalApprovedAt: e.finalApprovedAt ?? null,
     exported: e.exported ?? false,
     exportedAt: e.exportedAt ?? null,
+    history: e.history ?? [],
   };
+}
+
+function change(actor: Actor, text: string): EntryChange {
+  return { at: new Date().toISOString(), byId: actor.id, byName: actor.name, text };
 }
 
 function currentEntry(snapshot: Snapshot, projectId: string, employeeId: string, date: ISODate): DayEntry | undefined {
@@ -238,26 +356,26 @@ export function submitHours(
   if (args.end <= args.start) throw new CommandError("Koniec pracy musi być po starcie.");
   if (args.breakMin >= args.end - args.start) throw new CommandError("Przerwa jest dłuższa niż czas pracy.");
   const prev = currentEntry(snapshot, args.projectId, args.employeeId, args.date);
-  if (prev && (prev.status === "SUPERVISOR_APPROVED" || prev.status === "PM_APPROVED" || prev.exported))
-    throw new CommandError("Ten dzień jest już zatwierdzony i nie można go zmienić.");
-  const entry: DayEntry = {
+  if (prev && (prev.status !== "SUBMITTED" || prev.exported))
+    throw new CommandError("Ten dzień jest już zatwierdzony. Zmiany wprowadza supervisor.");
+  if (isLocked(args.date, prev, new Date())) throw new CommandError("Termin minął — ten dzień zmieni już tylko administrator.");
+  const next: DayEntry = {
+    ...(prev ?? {}),
     kind: "WORK",
     status: "SUBMITTED",
     start: args.start,
     end: args.end,
     breakMin: args.breakMin,
+    absence: null,
     submittedAt: new Date().toISOString(),
   };
+  const before = prev ? describeHours(prev) : null;
+  const after = describeHours(next);
+  if (before === after) throw new CommandError("Nic się nie zmieniło.");
+  next.history = [...(prev?.history ?? []), ...(before ? [change(actor, `Poprawione: ${before} → ${after}`)] : [])];
   return {
-    writes: entryWrites([{ ...args, entry }]),
-    audit: [
-      audit(
-        actor,
-        "HOURS_SUBMITTED",
-        args.projectId,
-        `${prev ? "Poprawiono" : "Wpisano"} godziny: ${formatDay(args.date)}, ${formatMinutes(args.start)}–${formatMinutes(args.end)}, przerwa ${args.breakMin} min`
-      ),
-    ],
+    writes: entryWrites([{ ...args, entry: next }]),
+    audit: [audit(actor, "HOURS_SUBMITTED", args.projectId, `${prev ? "Poprawiono" : "Wpisano"} godziny: ${formatDay(args.date)}, ${after}`)],
   };
 }
 
@@ -267,24 +385,38 @@ export function reportAbsence(
   args: { employeeId: string; from: ISODate; to: ISODate; type: AbsenceType; note?: string }
 ): ChangeSet {
   if (args.to < args.from) throw new CommandError("Koniec nieobecności nie może być przed startem.");
+  const now = new Date();
   const items: { projectId: string; employeeId: string; date: ISODate; entry: DayEntry }[] = [];
   for (const date of eachDay(args.from, args.to)) {
     if (weekdayIndex(date) >= 5) continue;
     const a = snapshot.assignments.find(
       (x) => x.employeeId === args.employeeId && x.from <= date && (!x.to || x.to >= date)
     );
-    const projectId = a?.projectId ?? snapshot.projects.find((p) => p.supervisorId === args.employeeId)?.id;
+    const projectId = a?.projectId ?? snapshot.projects.find((p) => p.supervisorId === args.employeeId && p.startDate <= date)?.id;
     if (!projectId) continue;
     const prev = currentEntry(snapshot, projectId, args.employeeId, date);
-    if (prev && (prev.status === "SUPERVISOR_APPROVED" || prev.status === "PM_APPROVED" || prev.exported)) continue;
+    if (prev && (prev.status !== "SUBMITTED" || prev.exported)) continue;
+    if (isLocked(date, prev, now)) continue;
     items.push({
       projectId,
       employeeId: args.employeeId,
       date,
-      entry: { kind: "ABSENCE", status: "SUBMITTED", absence: args.type, note: args.note ?? null, submittedAt: new Date().toISOString() },
+      entry: {
+        ...(prev ?? {}),
+        kind: "ABSENCE",
+        status: "SUBMITTED",
+        start: null,
+        end: null,
+        breakMin: null,
+        absence: args.type,
+        note: args.note ?? null,
+        submittedAt: now.toISOString(),
+        history: [...(prev?.history ?? []), ...(prev ? [change(actor, `Poprawione: ${describeHours(prev)} → nieobecność (${ABSENCE_LABEL[args.type].toLowerCase()})`)] : [])],
+      },
     });
   }
-  if (items.length === 0) throw new CommandError("W wybranym okresie nie ma dni roboczych w Twoich projektach do zgłoszenia.");
+  if (items.length === 0)
+    throw new CommandError("W wybranym okresie nie ma dni roboczych z zadaniem, które można jeszcze zmienić.");
   return {
     writes: entryWrites(items),
     audit: [
@@ -298,28 +430,88 @@ export function reportAbsence(
   };
 }
 
+function approvalFields(entry: DayEntry, level: QueueLevel, actor: Actor, at: string): DayEntry {
+  return level === "team"
+    ? { ...entry, status: approvedStatus(level), svApprovedBy: actor.id, svApprovedAt: at }
+    : { ...entry, status: approvedStatus(level), finalApprovedBy: actor.id, finalApprovedAt: at };
+}
+
 export function approve(snapshot: Snapshot, actor: Actor, items: QueueItem[]): ChangeSet {
-  if (items.length === 0) throw new CommandError("Nic nie jest zaznaczone.");
+  if (items.length === 0) throw new CommandError("Nie ma nic do zatwierdzenia.");
   const now = new Date().toISOString();
   const updated = items.map((it) => {
-    const status = approvedStatus(it.level);
-    const entry: DayEntry =
-      it.level === "team"
-        ? { ...it.entry, status, svApprovedBy: actor.id, svApprovedAt: now, rejectionReason: null }
-        : { ...it.entry, status, finalApprovedBy: actor.id, finalApprovedAt: now, rejectionReason: null };
+    let entry = approvalFields(it.entry, it.level, actor, now);
+    if (it.locked) entry = { ...entry, history: [...(entry.history ?? []), change(actor, "Zatwierdzone po terminie — pójdzie w najbliższej wtorkowej wysyłce")] };
     return { ...it, entry };
   });
   return { writes: entryWrites(updated), audit: summarize(snapshot, actor, "HOURS_APPROVED", "Zatwierdzono", items) };
 }
 
-export function reject(snapshot: Snapshot, actor: Actor, items: QueueItem[], reason: string): ChangeSet {
-  if (items.length === 0) throw new CommandError("Nic nie jest zaznaczone.");
-  if (!reason.trim()) throw new CommandError("Napisz powód odrzucenia — pracownik zobaczy go przy dniu.");
-  const updated = items.map((it) => ({
-    ...it,
-    entry: { ...it.entry, status: "REJECTED" as const, rejectionReason: reason.trim(), svApprovedBy: null, svApprovedAt: null },
-  }));
-  return { writes: entryWrites(updated), audit: summarize(snapshot, actor, "HOURS_REJECTED", `Odrzucono (${reason.trim()})`, items) };
+export interface EntryInput {
+  kind: EntryKind;
+  start?: number | null;
+  end?: number | null;
+  breakMin?: number | null;
+  absence?: AbsenceType | null;
+}
+
+/**
+ * Zmiana dnia przez osobę z uprawnieniami (supervisor, IM, administrator) — także zatwierdzonego.
+ * Zmiana zostaje w notatce wpisu (kto, kiedy, co było, co jest) i w dzienniku zmian.
+ * Opcjonalnie od razu zatwierdza dzień na poziomie tej osoby.
+ */
+export function editEntry(
+  snapshot: Snapshot,
+  actor: Actor,
+  args: {
+    projectId: string;
+    employeeId: string;
+    date: ISODate;
+    input: EntryInput;
+    comment?: string;
+    approveLevel?: QueueLevel | null;
+  }
+): ChangeSet {
+  const { input } = args;
+  if (input.kind === "WORK") {
+    if (input.start == null || input.end == null) throw new CommandError("Podaj godziny pracy.");
+    if (input.end <= input.start) throw new CommandError("Koniec pracy musi być po starcie.");
+    if ((input.breakMin ?? 0) >= input.end - input.start) throw new CommandError("Przerwa jest dłuższa niż czas pracy.");
+  } else if (!input.absence) throw new CommandError("Wybierz rodzaj nieobecności.");
+
+  const prev = currentEntry(snapshot, args.projectId, args.employeeId, args.date);
+  if (prev?.exported) throw new CommandError("Ten dzień jest już w Dataverse — nie można go zmienić.");
+  const actorRole = snapshot.employees.find((e) => e.id === actor.id)?.role;
+  if (isLocked(args.date, prev, new Date()) && actorRole !== "ADMIN")
+    throw new CommandError("Termin minął — ten dzień zmieni i zatwierdzi tylko administrator.");
+
+  const at = new Date().toISOString();
+  let next: DayEntry = {
+    ...(prev ?? { status: "SUBMITTED", submittedAt: at }),
+    kind: input.kind,
+    start: input.kind === "WORK" ? input.start ?? null : null,
+    end: input.kind === "WORK" ? input.end ?? null : null,
+    breakMin: input.kind === "WORK" ? input.breakMin ?? 0 : null,
+    absence: input.kind === "ABSENCE" ? input.absence ?? "OTHER" : null,
+  } as DayEntry;
+  const before = prev ? describeHours(prev) : null;
+  const after = describeHours(next);
+  const changed = before !== after;
+  const comment = args.comment?.trim();
+  if (!changed && !comment && !args.approveLevel) throw new CommandError("Nic się nie zmieniło.");
+
+  const parts: string[] = [];
+  if (changed) parts.push(before ? `${before} → ${after}` : `Wpisane: ${after}`);
+  if (comment) parts.push(`„${comment}"`);
+  if (parts.length) next.history = [...(prev?.history ?? []), change(actor, parts.join(" — "))];
+  if (args.approveLevel) next = approvalFields(next, args.approveLevel, actor, at);
+
+  const who = snapshot.employees.find((e) => e.id === args.employeeId)?.name ?? args.employeeId;
+  const summary = `${who}, ${formatDay(args.date)}: ${parts.join(" — ") || "bez zmian"}${args.approveLevel ? " (zatwierdzono)" : ""}`;
+  return {
+    writes: entryWrites([{ projectId: args.projectId, employeeId: args.employeeId, date: args.date, entry: next }]),
+    audit: [audit(actor, changed || comment ? "HOURS_EDITED" : "HOURS_APPROVED", args.projectId, summary)],
+  };
 }
 
 function summarize(snapshot: Snapshot, actor: Actor, action: AuditAction, verb: string, items: QueueItem[]): AuditEvent[] {
@@ -327,9 +519,14 @@ function summarize(snapshot: Snapshot, actor: Actor, action: AuditAction, verb: 
   items.forEach((it) => byProject.set(it.projectId, [...(byProject.get(it.projectId) ?? []), it]));
   return [...byProject.entries()].map(([projectId, list]) => {
     const people = [...new Set(list.map((i) => snapshot.employees.find((e) => e.id === i.employeeId)?.name ?? i.employeeId))];
-    const minutes = list.reduce((s, i) => s + workedMinutes(i.entry), 0);
+    const sheets = countTimesheets(list);
     const who = people.length > 3 ? `${people.slice(0, 3).join(", ")} i ${people.length - 3} innych` : people.join(", ");
-    return audit(actor, action, projectId, `${verb} ${list.length} poz. (${formatHoursTotal(minutes)}): ${who}`);
+    return audit(
+      actor,
+      action,
+      projectId,
+      `${verb} ${sheets} ${plural(sheets, "timesheet", "timesheety", "timesheetów")} (${daysCount(list.length)}): ${who}`
+    );
   });
 }
 

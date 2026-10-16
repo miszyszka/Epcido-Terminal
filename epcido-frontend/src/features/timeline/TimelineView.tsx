@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useModel, useUser } from "../../app/DataContext";
-import { useUi } from "../../app/UiContext";
 import { Legend } from "../../components/Legend";
 import { PageHeader } from "../../components/PageHeader";
 import { ProjectDot } from "../../components/PersonBadge";
 import { WeekNav } from "../../components/WeekNav";
 import { visibleProjects } from "../../domain/permissions";
 import { addDays, eachDay, startOfWeek, todayISO } from "../../lib/dates";
-import { searchProjects } from "../../lib/search";
 import { ProjectCard } from "../grid/ProjectCard";
 
 const WEEKS = 2;
@@ -17,9 +15,10 @@ const WEEKS = 2;
 export function TimelineView() {
   const model = useModel();
   const user = useUser();
-  const { search } = useUi();
   const [params, setParams] = useSearchParams();
   const focus = params.get("projekt");
+  const personId = params.get("osoba");
+  const person = personId ? model.employeeById.get(personId) : null;
   const today = todayISO();
   const currentWeek = startOfWeek(today);
   const [offset, setOffset] = useState(0);
@@ -27,14 +26,19 @@ export function TimelineView() {
   const days = useMemo(() => eachDay(from, addDays(from, WEEKS * 7 - 1)), [from]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  const allowed = new Set(visibleProjects(model, user).map((p) => p.id));
-  let matches = searchProjects(model, search).filter((m) => allowed.has(m.project.id));
+  let matches = visibleProjects(model, user).map((project) => ({ project, people: null as Set<string> | null }));
   if (focus) matches = matches.filter((m) => m.project.id === focus);
+  if (person) {
+    const only = new Set([person.id]);
+    matches = matches
+      .filter((m) => model.rows(m.project.id, days[0], days[days.length - 1]).some((r) => r.employee.id === person.id))
+      .map((m) => ({ ...m, people: only }));
+  }
   const focusProject = focus ? model.projectById.get(focus) : null;
 
   useEffect(() => {
     document.querySelector(".app-scroll")?.scrollTo({ top: 0 });
-  }, [focus]);
+  }, [focus, personId]);
 
   const allCollapsed = matches.length > 0 && matches.every((m) => collapsed.has(m.project.id));
   const toggle = (id: string) =>
@@ -49,7 +53,6 @@ export function TimelineView() {
     <div className="page">
       <PageHeader
         title="Oś czasu"
-        description="Godziny od–do, przerwa i powód nieobecności każdej osoby, dzień po dniu."
         actions={
           <WeekNav from={from} weeks={WEEKS} onShift={(d) => setOffset((o) => o + d)} onToday={() => setOffset(0)} isCurrent={offset === 0} />
         }
@@ -74,6 +77,22 @@ export function TimelineView() {
               <span className="sr-only">, pokaż wszystkie projekty</span>
             </button>
           )}
+          {person && (
+            <button
+              type="button"
+              className="chip chip--filter"
+              onClick={() => {
+                params.delete("osoba");
+                setParams(params);
+              }}
+            >
+              Tylko {person.name}
+              <span className="chip__x" aria-hidden>
+                ×
+              </span>
+              <span className="sr-only">, pokaż wszystkich</span>
+            </button>
+          )}
           {matches.length > 1 && (
             <button
               type="button"
@@ -87,7 +106,7 @@ export function TimelineView() {
       </div>
       {matches.length === 0 ? (
         <div className="empty">
-          <p>{search ? `Żaden projekt ani osoba nie pasuje do „${search}".` : "Nie masz jeszcze żadnych projektów."}</p>
+          <p>{person ? `${person.name} nie ma zadań w tych tygodniach.` : "Nie masz jeszcze żadnych projektów."}</p>
         </div>
       ) : (
         <div className="pcards">

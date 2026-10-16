@@ -1,9 +1,8 @@
 import { useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { PageHeader } from "../../components/PageHeader";
-import { PersonChip, PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { PositionMark, ProjectDot } from "../../components/PersonBadge";
 import type { Employee } from "../../domain/types";
-import { matches } from "../../lib/search";
 import { canEditProject, visibleProjects as allowedProjects } from "../../domain/permissions";
 import { todayISO } from "../../lib/dates";
 import { people as peopleCount, projectsCount } from "../../lib/text";
@@ -12,7 +11,7 @@ import { people as peopleCount, projectsCount } from "../../lib/text";
 export function StructureView() {
   const model = useModel();
   const user = useUser();
-  const { search, openProject } = useUi();
+  const { openProject } = useUi();
   const today = todayISO();
   const allowed = new Set(allowedProjects(model, user).map((p) => p.id));
   const scoped = model.projects.filter((p) => allowed.has(p.id));
@@ -29,33 +28,16 @@ export function StructureView() {
     if (p && canEditProject(user, p)) openProject(id);
   };
 
-  const visibleProjects = (projectIds: string[]) =>
-    projectIds
-      .map((id) => model.team(id)!)
-      .filter((t) =>
-        matches(
-          search,
-          t.project.name,
-          t.project.number,
-          t.project.customerName,
-          t.supervisor?.name,
-          t.installationManager?.name,
-          ...t.members.map((m) => m.name)
-        )
-      );
+  const visibleProjects = (projectIds: string[]) => projectIds.map((id) => model.team(id)!);
 
   return (
     <div className="page">
-      <PageHeader
-        title="Struktura zespołów"
-        description="Kto komu podlega. Team Leaderzy są na tym samym poziomie co elektrycy i mechanicy — różni ich rola na budowie, nie miejsce w strukturze."
-      />
+      <PageHeader title="Struktura zespołów" />
 
       <div className="org">
         {ims.map((im) => {
           const projectIds = scoped.filter((p) => p.installationManagerId === im.id).map((p) => p.id);
           const teams = visibleProjects(projectIds);
-          if (search && teams.length === 0 && !matches(search, im.name)) return null;
           const people = teams.reduce((n, t) => n + t.members.length + (t.supervisor ? 1 : 0), 0);
           return (
             <section key={im.id} className="org-col" aria-label={im.name}>
@@ -147,6 +129,7 @@ export function StructureView() {
   );
 }
 
+/** Grupa osób — zawsze jedna osoba w wierszu, grupy jedna pod drugą. */
 function TeamGroup({ label, people }: { label: string; people: Employee[] }) {
   if (people.length === 0) return null;
   return (
@@ -154,11 +137,14 @@ function TeamGroup({ label, people }: { label: string; people: Employee[] }) {
       <div className="team-group__label">
         {label} <span>{people.length}</span>
       </div>
-      <div className="team-group__chips">
+      <ul className="team-group__list">
         {people.map((p) => (
-          <PersonChip key={p.id} employee={p} />
+          <li key={p.id}>
+            <PositionMark employee={p} />
+            <span>{p.name}</span>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

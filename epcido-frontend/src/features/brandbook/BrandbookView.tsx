@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DatePicker } from "../../components/DatePicker";
 import { DayCard, DayCell } from "../../components/DayCell";
+import { DeadlineBanner } from "../../components/DeadlineBanner";
 import { Field, TextInput } from "../../components/Field";
 import { SelectMenu } from "../../components/SelectMenu";
 import { PageHeader } from "../../components/PageHeader";
@@ -11,8 +12,8 @@ import { todayISO } from "../../lib/dates";
 
 const BRAND = [
   { name: "Deep Forest", hex: "#0F3D3A", role: "Atrament marki, główne akcje, dzień zatwierdzony", dark: true },
-  { name: "Golden Hour", hex: "#F4B13B", role: "Tylko stan: czeka na zatwierdzenie" },
-  { name: "Terracotta Clay", hex: "#E0745E", role: "Tylko stan: nieobecny" },
+  { name: "Golden Hour", hex: "#F4B13B", role: "Tylko stan: do zatwierdzenia" },
+  { name: "Terracotta Clay", hex: "#E0745E", role: "Tylko stan: nieobecny; tekst alarmów (braki, termin)" },
   { name: "Warm Sand", hex: "#F2E6D6", role: "Weekendy, zaznaczenia, plakietki ról" },
 ];
 
@@ -25,12 +26,25 @@ const WORKING = [
   { name: "Las 50", token: "--forest-50", hex: "#EAF1F0" },
 ];
 
-const STATES: DayState[] = ["approved", "pending", "absent", "off"];
+const STATES: DayState[] = ["approved", "pending", "absent", "missed", "off"];
 const SAMPLE: Record<DayState, DayEntry | undefined> = {
   approved: { kind: "WORK", status: "SUPERVISOR_APPROVED", start: 420, end: 1020, breakMin: 30 },
   pending: { kind: "WORK", status: "SUBMITTED", start: 420, end: 1080, breakMin: 60 },
   absent: { kind: "ABSENCE", status: "SUBMITTED", absence: "SICK" },
+  missed: { kind: "WORK", status: "SUBMITTED", start: 420, end: 1080, breakMin: 30 },
   off: undefined,
+};
+
+const NOW = Date.now();
+const BANNER = {
+  week: "2026-10-12",
+  approveBy: "2026-10-19",
+  lockAt: new Date(NOW + 3 * 86_400_000),
+  exportAt: new Date(NOW + 3 * 86_400_000 + 23 * 3_600_000),
+  timesheets: 24,
+  later: 0,
+  laterApproveBy: null,
+  missed: 0,
 };
 
 /** Żywy brandbook: tokeny i komponenty dokładnie tak, jak są w aplikacji. Opis: docs/BRANDBOOK.md */
@@ -41,10 +55,7 @@ export function BrandbookView() {
 
   return (
     <div className="page brandbook">
-      <PageHeader
-        title="Brandbook"
-        description="Zasady wyglądu Epcido Terminal w jednym miejscu. Każdy nowy moduł korzysta z tych kolorów, kroju i komponentów. Pełny opis: docs/BRANDBOOK.md."
-      />
+      <PageHeader title="Brandbook" />
 
       <section className="bb-section">
         <h2 className="section-title">Cztery zasady</h2>
@@ -59,7 +70,7 @@ export function BrandbookView() {
             <strong>Pływa tylko to, co chwilowe.</strong> Cień mają dock, panele, kalendarz i komunikaty.
           </li>
           <li>
-            <strong>Gęstość przez szerokość.</strong> Długie listy zwężają krój, a nie zmniejszają liter.
+            <strong>Kontrast grubości.</strong> Tytuły i liczby grube, opisy lekkie — bez dodatkowych kolorów.
           </li>
         </ol>
       </section>
@@ -96,7 +107,7 @@ export function BrandbookView() {
               <div className="bb-state__cells">
                 <DayCell state={s} size="mini" label={DAY_STATE_LABEL[s]} />
                 <DayCell state={s} size="map" label={DAY_STATE_LABEL[s]} />
-                <DayCard entry={SAMPLE[s]} expected />
+                <DayCard entry={SAMPLE[s]} state={s} expected />
               </div>
               <strong>{DAY_STATE_LABEL[s]}</strong>
             </div>
@@ -104,26 +115,31 @@ export function BrandbookView() {
           <div className="bb-state">
             <div className="bb-state__cells">
               <DayCell state="approved" size="map" sent label="Wysłane do Dataverse" />
-              <DayCard entry={{ ...SAMPLE.approved!, exported: true }} />
+              <DayCard entry={{ ...SAMPLE.approved!, exported: true }} state="approved" sent />
+              <DayCard
+                entry={{ ...SAMPLE.approved!, history: [{ at: new Date(NOW).toISOString(), byId: "sv-1", byName: "Supervisor 1", text: "7:00–18:00 → 7:00–17:00" }] }}
+                state="approved"
+                tip="Zmienione przez Supervisor 1"
+              />
               <DayCell state="pending" size="map" today label="Dziś" />
               <DayCell state="off" size="map" planned label="Zaplanowany dzień" />
             </div>
-            <strong>Wysłane do Dataverse, dziś, dzień zaplanowany</strong>
+            <strong>Wysłane do Dataverse, zmienione przez supervisora, dziś, dzień zaplanowany</strong>
           </div>
         </div>
       </section>
 
       <section className="bb-section">
-        <h2 className="section-title">Typografia: Archivo</h2>
+        <h2 className="section-title">Typografia: Plus Jakarta Sans</h2>
         <div className="bb-type">
           <p className="bb-type__sample bb-type__sample--display">Plan projektów</p>
-          <p className="bb-type__meta">Tytuł ekranu: 37 px, grubość 640, szerokość 112%</p>
+          <p className="bb-type__meta">Tytuł ekranu: 38 px, grubość 800, odstęp −0,03 em</p>
           <p className="bb-type__sample bb-type__sample--xl">Projekt 3, Tilburg</p>
-          <p className="bb-type__meta">Nazwa projektu: 23.5 px, grubość 600, szerokość 108%</p>
+          <p className="bb-type__meta">Nazwa projektu: 23,5 px, grubość 700</p>
           <p className="bb-type__sample">Supervisor zatwierdza godziny zespołu do poniedziałku.</p>
-          <p className="bb-type__meta">Tekst: 15 px, grubość 420, szerokość 100%</p>
-          <p className="bb-type__sample bb-type__sample--condensed">Sebastian Wnęk, Damian Szendera, Jan Sosnowski</p>
-          <p className="bb-type__meta">Nazwiska w siatkach: 15 px, szerokość 82%</p>
+          <p className="bb-type__meta">Tekst: 15 px, grubość 400</p>
+          <p className="bb-type__sample bb-type__sample--light">Godziny wpisane przez zespół w tym tygodniu</p>
+          <p className="bb-type__meta">Opis, podpis, drugi plan: grubość 300</p>
           <p className="bb-type__sample bb-type__sample--nums">7:00 → 17:00, 9 h 30 min</p>
           <p className="bb-type__meta">Liczby zawsze tabelaryczne</p>
         </div>
@@ -158,10 +174,13 @@ export function BrandbookView() {
           </div>
           <div className="bb-row">
             <span className="badge badge--approved">Zatwierdzone</span>
-            <span className="badge badge--pending">12 czeka</span>
+            <span className="badge badge--pending">12 timesheetów do zatwierdzenia</span>
             <span className="badge badge--absent">3 dni nieob.</span>
+            <span className="badge badge--missed">Nie wysłane</span>
             <span className="badge badge--status badge--active">W realizacji</span>
           </div>
+          <DeadlineBanner summary={{ ...BANNER, remainingMs: 3 * 86_400_000 + 3_600_000, urgent: false }} />
+          <DeadlineBanner summary={{ ...BANNER, timesheets: 5, remainingMs: 5 * 3_600_000, urgent: true }} />
           <Segmented
             label="Przykład"
             value={seg}

@@ -44,9 +44,16 @@ export function emptyProjectInput(projects: Project[], pmId: string | null): Pro
     projectManagerId: pmId,
     installationManagerId: null,
     supervisorId: null,
+    needElectricians: null,
+    needMechanics: null,
     dataverseId: "",
     dataverseNumber: "",
   };
+}
+
+function toCount(text: string): number | null {
+  const digits = text.replace(/\D/g, "");
+  return digits ? Math.min(500, Number.parseInt(digits, 10)) : null;
 }
 
 /** Dane projektu — te same pola przy tworzeniu i edycji. Sekcje jak w Gantbee, bez zbędnych pól. */
@@ -81,7 +88,7 @@ export function ProjectForm({ values, onChange: set, errors, projectId, readOnly
       </section>
 
       <section className="form-section">
-        <h3 className="form-section__title">Klient i budowa</h3>
+        <h3 className="form-section__title">Klient i miejsce</h3>
         <Field label="Klient" htmlFor="f-customer" error={errors.customerName}>
           <TextInput
             id="f-customer"
@@ -100,7 +107,7 @@ export function ProjectForm({ values, onChange: set, errors, projectId, readOnly
           <TextInput id="f-order" value={values.customerOrderNo} onChange={(e) => set("customerOrderNo", e.target.value)} />
         </Field>
         <div className="form-grid">
-          <Field label="Adres budowy" htmlFor="f-address" optional>
+          <Field label="Adres projektu" htmlFor="f-address" optional>
             <TextInput id="f-address" value={values.siteAddress} onChange={(e) => set("siteAddress", e.target.value)} />
           </Field>
           <Field label="Kraj" htmlFor="f-country" optional>
@@ -125,6 +132,33 @@ export function ProjectForm({ values, onChange: set, errors, projectId, readOnly
               placeholder="Nieznany"
               clearable
               invalid={!!errors.endDate}
+            />
+          </Field>
+        </div>
+      </section>
+
+      <section className="form-section">
+        <h3 className="form-section__title">Zapotrzebowanie</h3>
+        <p className="form-section__lead">Ilu ludzi potrzeba w projekcie (razem z Team Leaderami). Planning widzi braki w Obsadzie.</p>
+        <div className="form-grid">
+          <Field label="Elektrycy" htmlFor="f-need-el" error={errors.needElectricians} optional>
+            <TextInput
+              id="f-need-el"
+              inputMode="numeric"
+              value={values.needElectricians ?? ""}
+              onChange={(e) => set("needElectricians", toCount(e.target.value))}
+              invalid={!!errors.needElectricians}
+              placeholder="np. 8"
+            />
+          </Field>
+          <Field label="Mechanicy" htmlFor="f-need-me" error={errors.needMechanics} optional>
+            <TextInput
+              id="f-need-me"
+              inputMode="numeric"
+              value={values.needMechanics ?? ""}
+              onChange={(e) => set("needMechanics", toCount(e.target.value))}
+              invalid={!!errors.needMechanics}
+              placeholder="np. 6"
             />
           </Field>
         </div>

@@ -10,6 +10,7 @@ export type Permission =
   | "project.create"
   | "project.edit"
   | "team.plan"
+  | "staffing.plan"
   | "hours.own"
   | "hours.approveTeam"
   | "hours.approveFinal"
@@ -23,10 +24,11 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   "projects.own": "Widzi swoje projekty",
   "project.create": "Tworzy projekty",
   "project.edit": "Edytuje dane projektu",
-  "team.plan": "Planuje zespoły (paski od–do)",
+  "team.plan": "Planuje zespoły (zadania od–do)",
+  "staffing.plan": "Obsada: przesuwa ludzi między projektami",
   "hours.own": "Wpisuje swoje godziny",
-  "hours.approveTeam": "Zatwierdza godziny zespołu",
-  "hours.approveFinal": "Zatwierdza godziny po supervisorach",
+  "hours.approveTeam": "Zatwierdza i zmienia godziny zespołu",
+  "hours.approveFinal": "Zatwierdza i zmienia godziny po supervisorach",
   "dashboard.supervisors": "Pulpit supervisorów",
   "people.view": "Lista ludzi",
   "structure.view": "Struktura zespołów",
@@ -37,7 +39,7 @@ export const PERMISSION_ORDER = Object.keys(PERMISSION_LABEL) as Permission[];
 
 export const ROLE_PERMISSIONS: Record<AccessRole, Permission[]> = {
   ADMIN: PERMISSION_ORDER.filter((p) => p !== "projects.own" && p !== "hours.own"),
-  PLANNING: ["projects.all", "project.create", "project.edit", "team.plan", "people.view", "structure.view"],
+  PLANNING: ["projects.all", "project.create", "project.edit", "team.plan", "staffing.plan", "people.view", "structure.view"],
   PROJECT_MANAGER: ["projects.own", "project.create", "project.edit", "structure.view"],
   INSTALLATION_MANAGER: ["projects.own", "hours.approveFinal", "dashboard.supervisors", "people.view", "structure.view"],
   SUPERVISOR: ["projects.own", "hours.own", "hours.approveTeam"],
@@ -82,6 +84,7 @@ export type Route =
   | "/os-czasu"
   | "/struktura"
   | "/ludzie"
+  | "/obsada"
   | "/moje-godziny";
 
 const ROUTE_PERMISSION: Record<Route, (u: Employee) => boolean> = {
@@ -91,11 +94,15 @@ const ROUTE_PERMISSION: Record<Route, (u: Employee) => boolean> = {
   "/os-czasu": (u) => u.role !== "WORKER",
   "/struktura": (u) => can(u, "structure.view"),
   "/ludzie": (u) => can(u, "people.view"),
+  "/obsada": (u) => can(u, "staffing.plan"),
   "/moje-godziny": (u) => can(u, "hours.own"),
 };
 
 /** Kolejność pozycji w docku dla danej roli. */
-const NAV_ORDER: Route[] = ["/pulpit", "/zatwierdzanie", "/moje-godziny", "/mapa", "/os-czasu", "/struktura", "/ludzie"];
+const NAV_ORDER: Route[] = ["/pulpit", "/zatwierdzanie", "/moje-godziny", "/mapa", "/os-czasu", "/struktura", "/ludzie", "/obsada"];
+
+/** Narzędzia tylko dla Planningu — w docku osobno, za kreską. */
+export const PLANNING_TOOLS: Route[] = ["/obsada"];
 
 export function routesFor(user: Employee): Route[] {
   const routes = NAV_ORDER.filter((r) => ROUTE_PERMISSION[r](user));

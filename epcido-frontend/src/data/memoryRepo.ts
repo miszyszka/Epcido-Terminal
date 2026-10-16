@@ -6,7 +6,7 @@ import type { AuditEvent } from "../domain/types";
 import type { ChangeSet, Repository, Snapshot } from "./repository";
 import { generateDataset, SEED_VERSION } from "./seed";
 
-const STORAGE_KEY = "epcido-demo-v3";
+const STORAGE_KEY = "epcido-demo-v4";
 
 type Store = {
   employees: Map<string, Record<string, unknown>>;

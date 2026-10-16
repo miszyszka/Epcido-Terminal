@@ -1,4 +1,3 @@
-import { formatMinutes } from "../lib/dates";
 import type { AbsenceType, AccessRole, DayEntry, DayState, Position, ProjectStatus, Trade } from "./types";
 
 export const POSITION_LABEL: Record<Position, string> = {
@@ -49,6 +48,7 @@ export const DAY_STATE_LABEL: Record<DayState, string> = {
   pending: "Do zatwierdzenia",
   absent: "Nieobecny",
   off: "Wolne lub brak wpisu",
+  missed: "Nie wysłane do Dataverse",
 };
 
 export const ABSENCE_LABEL: Record<AbsenceType, string> = {
@@ -65,53 +65,41 @@ export const ABSENCE_SHORT: Record<AbsenceType, string> = {
 
 export const BRANCHES = ["Polska", "Wielka Brytania", "Niemcy", "Beneluks", "Skandynawia", "Francja", "Czechy"];
 
-/** Kolory identyfikacyjne projektów — brandbook 2.4. Nie mylić z kolorami stanów. */
+/**
+ * Kolory identyfikacyjne projektów — brandbook 2.4. Rozstawione po całym kole barw, o podobnej jasności,
+ * żeby projekty dało się odróżnić na pierwszy rzut oka. Celowo bez żółci i czerwieni stanów dnia.
+ */
 export const PROJECT_COLORS = [
-  { value: "#5B7A99", name: "Łupek" },
-  { value: "#7FA7C9", name: "Niebo" },
-  { value: "#8C6A8D", name: "Śliwka" },
-  { value: "#A9A1C7", name: "Lawenda" },
-  { value: "#A39B8B", name: "Kamień" },
-  { value: "#3E5368", name: "Granat" },
-  { value: "#9DB3B0", name: "Mgła" },
-  { value: "#6F7F96", name: "Stal" },
+  { value: "#2F6FA3", name: "Kobalt" },
+  { value: "#1E9A8A", name: "Morski" },
+  { value: "#6A9A2E", name: "Oliwka" },
+  { value: "#7B4FB8", name: "Fiolet" },
+  { value: "#C24C8C", name: "Malina" },
+  { value: "#D9822B", name: "Pomarańcz" },
+  { value: "#3B4FC4", name: "Indygo" },
+  { value: "#2C8FC9", name: "Lazur" },
+  { value: "#8C5A3C", name: "Orzech" },
+  { value: "#A33D5E", name: "Wino" },
+  { value: "#4F6B7A", name: "Grafit" },
+  { value: "#9A8A1F", name: "Musztarda" },
 ];
 
-export function dayStateOf(entry: DayEntry | undefined): DayState {
-  if (!entry) return "off";
-  if (entry.kind === "ABSENCE") return "absent";
-  if (entry.status === "SUPERVISOR_APPROVED" || entry.status === "PM_APPROVED") return "approved";
-  return "pending";
+/** Domyślna nazwa zadania według branży (w Gantbee: taskname). */
+export function defaultTask(trade: Trade | undefined): string {
+  return trade === "MECHANICAL" ? "Prace mechaniczne" : "Prace elektryczne";
 }
 
-export function statusLabel(entry: DayEntry | undefined): string {
-  if (!entry) return DAY_STATE_LABEL.off;
-  if (entry.exported) return "Wysłane do Dataverse";
-  switch (entry.status) {
-    case "PM_APPROVED":
-      return "Zatwierdzone przez supervisora i IM";
-    case "SUPERVISOR_APPROVED":
-      return "Zatwierdzone przez supervisora";
-    case "REJECTED":
-      return "Odrzucone, do poprawy";
-    default:
-      return "Do zatwierdzenia";
-  }
-}
-
-/** Opis dnia do dymka: godziny, przerwa, powód nieobecności, stan. */
-export function describeEntry(entry: DayEntry | undefined): string {
-  if (!entry) return DAY_STATE_LABEL.off;
-  const lines: string[] = [];
-  if (entry.kind === "ABSENCE") {
-    lines.push(`Nieobecny: ${ABSENCE_LABEL[entry.absence ?? "OTHER"].toLowerCase()}`);
-  } else if (entry.start != null && entry.end != null) {
-    lines.push(`${formatMinutes(entry.start)}–${formatMinutes(entry.end)}, przerwa ${entry.breakMin ?? 0} min`);
-  }
-  lines.push(statusLabel(entry));
-  if (entry.status === "REJECTED" && entry.rejectionReason) lines.push(`Powód: ${entry.rejectionReason}`);
-  return lines.join("\n");
-}
+export const TASK_SUGGESTIONS = [
+  "Prace elektryczne",
+  "Prace mechaniczne",
+  "Prefabrykacja",
+  "Montaż tras kablowych",
+  "Podłączenia",
+  "Uruchomienie",
+  "Testy i odbiory",
+  "Serwis",
+  "Szkolenie",
+];
 
 /** Przepracowane minuty w dniu (bez przerwy). */
 export function workedMinutes(entry: DayEntry | undefined): number {

@@ -3,15 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import { useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
-import { SentMark } from "../../components/DayCell";
+import { useNow } from "../../app/hooks";
+import { MissedMark, SentMark } from "../../components/DayCell";
 import { PositionMark, ProjectDot } from "../../components/PersonBadge";
 import { projectStats } from "../../domain/aggregate";
-import { formatHoursTotal, PROJECT_STATUS_LABEL } from "../../domain/labels";
+import { PROJECT_STATUS_LABEL } from "../../domain/labels";
+import { timesheetsNom } from "../../domain/workflow";
 import { canEditProject } from "../../domain/permissions";
 import type { Project } from "../../domain/types";
 import { formatDate, type ISODate } from "../../lib/dates";
 import { cityOf } from "../../lib/search";
-import { absences, people as peopleCount, positions } from "../../lib/text";
+import { absences, people as peopleCount } from "../../lib/text";
 import { ProjectDays } from "./ProjectDays";
 
 interface ProjectCardProps {
@@ -21,12 +23,14 @@ interface ProjectCardProps {
   variant: "compact" | "detailed";
   /** Pokaż tylko te osoby (wyszukiwanie po nazwisku) */
   only?: Set<string> | null;
+  /** Bez nagłówka dni — nagłówek jest wspólny, przyklejony u góry strony */
+  hideDaysHead?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
 }
 
 /** Karta projektu: nagłówek z liczbami + siatka dni. Ta sama na mapie i osi czasu. */
-export function ProjectCard({ project, days, today, variant, only, collapsed, onToggle }: ProjectCardProps) {
+export function ProjectCard({ project, days, today, variant, only, collapsed, onToggle, hideDaysHead }: ProjectCardProps) {
   const model = useModel();
   const user = useUser();
   const { openProject } = useUi();
@@ -37,7 +41,8 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
     () => model.rows(project.id, from, to).filter((r) => !only || only.has(r.employee.id)),
     [model, project.id, from, to, only]
   );
-  const stats = useMemo(() => projectStats(model, project.id, from, to), [model, project.id, from, to]);
+  const now = useNow();
+  const stats = useMemo(() => projectStats(model, project.id, now, from, to), [model, project.id, now, from, to]);
   const supervisor = project.supervisorId ? model.employeeById.get(project.supervisorId) : null;
   const editable = canEditProject(user, project);
 
@@ -86,12 +91,13 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
           ) : (
             <span className="muted">{peopleCount(rows.length)}</span>
           )}
-          {stats.pending > 0 && (
-            <span className="badge badge--pending" data-tip="Wpisy czekające na supervisora lub Installation Managera">
-              Do zatwierdzenia: {positions(stats.pending)}, {formatHoursTotal(stats.pendingMinutes)}
+          {stats.pending > 0 && <span className="badge badge--pending">Do zatwierdzenia: {timesheetsNom(stats.pending)}</span>}
+          {stats.missed > 0 && (
+            <span className="badge badge--missed" data-tip="Nie zatwierdzone do poniedziałku 23:59 — nie poszły do Dataverse. Zatwierdza administrator.">
+              <MissedMark size={10} />
+              Nie wysłane: {timesheetsNom(stats.missed)}
             </span>
           )}
-          {stats.rejected > 0 && <span className="badge badge--absent">Do poprawy: {stats.rejected}</span>}
           {stats.absences > 0 && variant === "detailed" && <span className="badge badge--neutral">{absences(stats.absences)}</span>}
           {stats.lastSent && (
             <span className="pcard__sent">
@@ -105,7 +111,7 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
       </header>
       {!collapsed && (
         <div className="pcard__scroll">
-          <ProjectDays project={project} rows={rows} days={days} today={today} variant={variant} />
+          <ProjectDays project={project} rows={rows} days={days} today={today} variant={variant} hideHead={hideDaysHead} />
         </div>
       )}
     </article>

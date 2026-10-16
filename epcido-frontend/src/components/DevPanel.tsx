@@ -53,7 +53,7 @@ export function DevPanel() {
 
   const activeRow = current ? ROWS.find((r) => r.match(current)) : undefined;
   const seeded = model?.snapshot.seeded ?? false;
-  const outdated = Boolean(model && seeded && (model.snapshot.seedVersion ?? 1) < 3);
+  const outdated = Boolean(model && seeded && (model.snapshot.seedVersion ?? 1) < 4);
 
   return (
     <aside className="devpanel" aria-label="Panel roboczy">

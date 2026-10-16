@@ -1,6 +1,6 @@
 # 0008. Role, ścieżka zatwierdzania, terminy i okresy pracy
 
-- Status: Przyjęta (do potwierdzenia z zarządem: rola PM w zatwierdzaniu)
+- Status: Przyjęta, częściowo zastąpiona przez ADR 0009 (odrzucanie i termin edycji)
 - Data: 2026-10-16
 - Decydujący: zespół Epcido Terminal
 

@@ -1,20 +1,24 @@
-import { Link } from "react-router-dom";
-import { Monitor, Plus, Smartphone } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { AlarmClock, Monitor, Plus, Smartphone } from "lucide-react";
 import { useData } from "../app/DataContext";
-import { useQueue, useRejectedOwn } from "../app/hooks";
+import { useQueue } from "../app/hooks";
 import { useSession } from "../app/SessionContext";
 import { useUi } from "../app/UiContext";
-import { formatHoursTotal, ROLE_LABEL } from "../domain/labels";
+import { ROLE_LABEL } from "../domain/labels";
 import { can, canApprove, homeFor } from "../domain/permissions";
-import { daysCount, positions } from "../lib/text";
+import { formatRemaining, timesheetsGen, timesheetsNom } from "../domain/workflow";
+import { GlobalSearch } from "./GlobalSearch";
 
-/** Górna linia: powitanie, liczba pozycji do zatwierdzenia, główne akcje. Bez tła — leży na stronie. */
+/** Górna linia: powitanie, wyszukiwarka, czas na zatwierdzenie, główne akcje. Bez tła — leży na stronie. */
 export function TopBar() {
   const { user } = useData();
   const { preview, setPreview } = useSession();
   const { openNewProject } = useUi();
   const queue = useQueue();
-  const rejected = useRejectedOwn();
+  const location = useLocation();
+  // Na zatwierdzaniu i pulpicie ten sam komunikat jest w banerze na stronie
+  const pillHere = !location.pathname.startsWith("/zatwierdzanie") && !location.pathname.startsWith("/pulpit");
+  const s = queue.summary;
 
   return (
     <header className="topbar">
@@ -39,28 +43,28 @@ export function TopBar() {
         </div>
       )}
 
+      <GlobalSearch />
+
       <div className="topbar__actions">
-        {user && canApprove(user) && (
-          <Link to="/zatwierdzanie" className={`approvals-pill ${queue.items.length ? "has-items" : ""}`}>
-            {queue.items.length ? (
+        {user && canApprove(user) && s && pillHere && (
+          <Link
+            to="/zatwierdzanie"
+            className={`approvals-pill ${s.timesheets || s.later ? "has-items" : ""} ${s.urgent && s.timesheets ? "is-urgent" : ""}`}
+          >
+            {s.timesheets > 0 ? (
               <>
-                <span className="approvals-pill__dot" aria-hidden />
+                <AlarmClock size={16} aria-hidden />
                 <span>
-                  Masz <strong>{positions(queue.items.length)}</strong> do zatwierdzenia
+                  Masz <strong>{formatRemaining(s.remainingMs)}</strong> na zatwierdzenie <strong>{timesheetsGen(s.timesheets)}</strong>
                 </span>
-                <small>{formatHoursTotal(queue.minutes)}</small>
               </>
+            ) : s.later > 0 ? (
+              <span>
+                <strong>{timesheetsNom(s.later)}</strong> do zatwierdzenia
+              </span>
             ) : (
               <span>Wszystko zatwierdzone</span>
             )}
-          </Link>
-        )}
-        {user && rejected > 0 && can(user, "hours.own") && (
-          <Link to="/moje-godziny" className="approvals-pill has-items approvals-pill--fix">
-            <span className="approvals-pill__dot" aria-hidden />
-            <span>
-              Masz <strong>{daysCount(rejected)}</strong> do poprawy
-            </span>
           </Link>
         )}
         {user && can(user, "project.create") && (
@@ -74,6 +78,7 @@ export function TopBar() {
           className="btn btn--secondary topbar__preview"
           onClick={() => setPreview(preview === "mobile" ? "desktop" : "mobile")}
           aria-pressed={preview === "mobile"}
+          aria-label={preview === "mobile" ? "Wersja desktopowa" : "Wersja mobilna"}
         >
           {preview === "mobile" ? <Monitor size={18} aria-hidden /> : <Smartphone size={18} aria-hidden />}
           <span>{preview === "mobile" ? "Wersja desktopowa" : "Wersja mobilna"}</span>

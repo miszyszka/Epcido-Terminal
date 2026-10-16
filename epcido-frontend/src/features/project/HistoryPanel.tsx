@@ -25,8 +25,8 @@ export function HistoryPanel({ projectId }: { projectId: string }) {
           <p className="history__what">{e.summary}</p>
           {e.changes && (
             <dl className="history__changes">
-              {e.changes.map((c) => (
-                <div key={c.field}>
+              {e.changes.map((c, i) => (
+                <div key={`${c.field}-${i}`}>
                   <dt>{c.field}</dt>
                   <dd>
                     <s>{c.before}</s> <span aria-hidden>→</span>
