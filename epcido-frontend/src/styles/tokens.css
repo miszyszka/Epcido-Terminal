@@ -102,7 +102,7 @@
   --dock-clearance: 104px;
   --panel-w: 300px;
   --staff-name: 230px;
-  --staff-side: 230px;
+  --staff-side: 250px;
 }
 
 /* Wąska ramka aplikacji (telefon albo podgląd mobilny) — reaguje na szerokość ramki, nie okna */

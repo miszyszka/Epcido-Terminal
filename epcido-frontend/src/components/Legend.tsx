@@ -21,12 +21,12 @@ export function Legend() {
         </li>
       ))}
       <li className="legend__item">
-        <DayCell state="approved" size="legend" sent label="Wysłane do Dataverse" />
-        <span>Wysłane do Dataverse</span>
+        <DayCell state="approved" size="legend" sent closed label="Tydzień zamknięty i wysłany do Dataverse — nienaruszalny" />
+        <span>Wysłane (zamknięte)</span>
       </li>
       <li className="legend__item">
-        <DayCell state="missed" size="legend" label="Nie zatwierdzone do poniedziałku 23:59 — nie wysłane do Dataverse" />
-        <span>Nie wysłane</span>
+        <DayCell state="missed" size="legend" label="Błąd w zamkniętym timesheecie (brak zatwierdzenia albo wpisu) — timesheet nie został wysłany" />
+        <span>Błąd — nie wysłany</span>
       </li>
     </ul>
   );

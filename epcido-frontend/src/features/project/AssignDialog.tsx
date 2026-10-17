@@ -4,7 +4,7 @@ import { useModel } from "../../app/DataContext";
 import { DatePicker } from "../../components/DatePicker";
 import { Dialog } from "../../components/Dialog";
 import { Field, TextInput } from "../../components/Field";
-import { PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { EmploymentTag, PositionMark, ProjectDot } from "../../components/PersonBadge";
 import { Segmented } from "../../components/Segmented";
 import { TASK_SUGGESTIONS } from "../../domain/labels";
 import type { Position } from "../../domain/types";
@@ -122,6 +122,7 @@ export function AssignDialog({ projectId, projectStart, projectEnd, alreadyPlann
                   <input type="checkbox" checked={checked} disabled={planned} onChange={() => toggle(employee.id)} />
                   <PositionMark employee={employee} />
                   <span className="assign__name">{employee.name}</span>
+                  <EmploymentTag employee={employee} />
                   {planned ? (
                     <span className="assign__status">już w planie — kolejne zadanie dodasz na osi</span>
                   ) : where ? (

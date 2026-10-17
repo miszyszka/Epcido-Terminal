@@ -1,6 +1,6 @@
 # Epcido Terminal — brandbook interfejsu
 
-> Wersja 1.2 · obowiązuje dla wszystkich modułów (planowanie, czas pracy, zatwierdzanie, obsada, komunikacja, aplikacja mobilna).
+> Wersja 1.3 · obowiązuje dla wszystkich modułów (planowanie, czas pracy, zatwierdzanie, obsada, komunikacja, aplikacja mobilna).
 > Źródło prawdy w kodzie: `src/styles/tokens.css`. Żywy podgląd: ekran **Brandbook** w aplikacji (`/brandbook`).
 > Zmiana tokenu = zmiana w tym pliku + w `tokens.css` w tym samym commicie.
 
@@ -53,15 +53,17 @@ Cztery zasady, które rozstrzygają spory projektowe:
 | **Zatwierdzony** | Deep Forest `#0F3D3A` | Godziny zatwierdzone przez supervisora (lub wyżej) |
 | **Do zatwierdzenia** | Golden Hour `#F4B13B` | Godziny wpisane przez pracownika lub TL, czekają na zatwierdzenie |
 | **Nieobecny** | Terracotta Clay `#E0745E` + biała kreska | Nieobecność (L4, urlop, inna) |
-| **Nie wysłane** | Szare ukośne kreski + wykrzyknik w ciemnym kółku | Nie zatwierdzone do końca do poniedziałku 23:59. Od wtorku 00:00 zatwierdza i zmienia je tylko administrator; po zatwierdzeniu idą w najbliższej wtorkowej wysyłce |
-| **Wolne / brak wpisu** | Biały + obrys `#DCE3E0`; w weekend piaskowy `#F2E6D6` | Dzień wolny albo nikt nic nie wpisał |
+| **Błąd — nie wysłany** | Szare ukośne kreski + wykrzyknik w ciemnym kółku; dzień bez wpisu: „Brak wpisu / nie wysłany" | Dzień, przez który timesheet projektu został wstrzymany: bez zatwierdzenia do końca do pn 23:59 albo bez wpisu w dzień roboczy z zadaniem. Zmienia i zatwierdza go tylko administrator; kompletny timesheet idzie w najbliższy wtorek |
+| **Wolne / brak wpisu** | Biały + obrys `#DCE3E0`; w weekend piaskowy `#F2E6D6` | Dzień wolny albo nikt nic nie wpisał (w otwartym tygodniu) |
+
+**Tydzień zamknięty** (od wtorku 00:00 po tygodniu) to warstwa na każdym stanie: kolor zostaje, ale jest lekko wyszarzony (`saturate .45–.5`, `opacity .82–.88`) i w ukośne białe paski. Wolne dni zamkniętego tygodnia mają szare paski na `--surface-2`. Komunikat: wszystko z tego tygodnia jest już nienaruszalne.
 
 Znaczniki na dniu:
 
 | Znak | Wygląd | Znaczenie |
 |---|---|---|
-| **Wysłane do Dataverse** | Zielony ptaszek `--sent #9FE3BB` w kropce; na dużej komórce kółko w rogu | Godziny poszły we wtorkowej wysyłce i są zamknięte |
-| **Nie wysłane** | Wykrzyknik; na dużej komórce ciemne kółko w rogu, tekst przekreślony | Patrz wyżej |
+| **Wysłane do Dataverse** | Zielony ptaszek `--sent #9FE3BB` w kropce; na dużej komórce kółko w rogu. Tylko na dniach z wpisem | Timesheet poszedł we wtorkowej wysyłce; nikt nic nie zmienia |
+| **Błąd — nie wysłany** | Wykrzyknik; na dużej komórce ciemne kółko w rogu, godziny przekreślone albo „Brak wpisu" | Patrz wyżej |
 | **Zmienione** | Mała kropka w prawym dolnym rogu dużej komórki | Osoba zatwierdzająca zmieniła dzień — szczegóły w notatce dnia |
 | **Zaplanowany dzień** | Pusta kropka z obrysem `--forest-100` | Przyszły dzień roboczy w zadaniu osoby |
 | **Przerwa** | Ukośne kreski w kolorze tła | Dzień między zadaniami osoby (np. wyjazd do domu) — wtedy nie wpisuje godzin |
@@ -71,6 +73,7 @@ Znaczniki na dniu:
 - Nieobecność bez ptaszka ma poziomą białą kreskę w środku — odróżnia się od „do zatwierdzenia" także dla osób, które słabo rozróżniają żółty i pomarańczowy.
 - Status zawsze nazywamy „Do zatwierdzenia" (nie „Czeka"). Nie ma stanu „do poprawy" — pracownik poprawia dzień, dopóki nikt go nie zatwierdził, a później zmienia go osoba zatwierdzająca.
 - Golden Hour i Terracotta Clay **nie mogą** być użyte jako kolor przycisku, nagłówka, ikony dekoracyjnej ani tła sekcji. Wyjątek: baner terminu (pkt 6) i liczby braków w Obsadzie — to też stan.
+- Komunikat dla wszystkich poza administratorem przy wstrzymanym timesheecie, zawsze tymi słowami: „Czas minął. Skontaktuj się z administratorem — Twój timesheet nie został wysłany z powodu błędnie wypełnionego timesheetu."
 - Plakietki stanów (tekst) używają jasnych odcieni: `--golden-100` z tekstem `#7A5208`, `--terracotta-100` z tekstem `#9E4232`, `--forest-50` z tekstem Deep Forest, `#E6EAE9` z tekstem `--missed-ink`.
 
 ### 2.4 Kolory identyfikacyjne projektów
@@ -196,9 +199,18 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 - Oś sięga zawsze **3 miesiące za najdalsze zadanie** i rośnie podczas przeciągania.
 
 ### Obsada
-- Kafle u góry są filtrami (liczba 36 px, 800): zwalnia się, bez przydziału, długo bez przerwy, projekty z brakami.
-- Projekty × tygodnie: tło tygodni w kolorze projektu (12%), w komórce „E 6/8 · M 4/4". Obsadzony — Deep Forest, brak — `#9E4232` grubo, bez zapotrzebowania — `--ink-2`. Koniec projektu: pionowa kreska w kolorze projektu z napisem „koniec".
-- Ludzie × tygodnie: paski w kolorach projektów, przerwy piaskowe z ikoną kubka, linia „dziś". Po prawej „co dalej": ostrzeżenie „8 tyg. bez przerwy", podpowiedź projektu z brakiem i przyciski „Zaplanuj dalej" / „Przerwa".
+- U góry dwa przełączniki-filtry (branża, kategoria) i jedno zdanie podsumowania.
+- Wszystkie siatki mają te same kolumny tygodni (od bieżącego), szerokość kolumny 56 px, nazwa `--staff-name` 230 px, kolumna boczna `--staff-side` 250 px.
+- **Siła robocza**: wiersze potrzeba / obsadzone / brakuje / wolni / bilans. Braki i ujemny bilans na `--terracotta-100` z tekstem `#9E4232` — to stan.
+- **Projekty × tygodnie**: tło tygodni w kolorze projektu (12%), w komórce „E 4/7 · M 3/4". Obsadzony — Deep Forest, brak — `#9E4232` grubo, bez zapotrzebowania — `--ink-2`. Koniec projektu: pionowa kreska w kolorze projektu z napisem „koniec". Przyszłe projekty: nazwa kursywą, „start … · za N tyg.". Wybrany projekt: obrys Deep Forest po lewej. Cel upuszczenia: przerywany obrys.
+- **Panel projektu** (szuflada z prawej, 460 px): fazy jako karty z „Elektrycy 1/3 · Mechanicy 1/2", pasek nasi / agencja z kreską 50%, kandydaci (stanowisko, osoba, umowa, doświadczenie w kategorii, od kiedy) z przyciskiem „Dodaj", zespół fazy.
+- **Ludzie × tygodnie**: uchwyt do przeciągania, osoba z umową, „Projekt 6 · kończy cz, 22 paź", doświadczenie „KNAPP 4 lata · łącznie 10 lat". Paski w kolorach projektów, przerwy piaskowe z ikoną kubka, linia „dziś". Po prawej: „wolny od …", podpowiedź projektu z brakiem, przyciski „Zaplanuj" / „Przerwa".
+- Dodanie osoby kończy się komunikatem z „Cofnij".
+
+### Kategorie i umowy
+- **Kategoria projektu** (KNAPP, KARDEX, FORTNA, OTHER): mała etykieta 20 px, promień 6 px, wersaliki są nazwą własną, nie stylem. Barwy przygaszone i stałe: KNAPP `#1D4F7A` na `#EEF4F9`, KARDEX `#6B3F12` na `#FAF3EA`, FORTNA `#4B2F78` na `#F4F0FA`, OTHER `--ink-2` na `--surface-2`. Nigdy Golden ani Terracotta.
+- **Umowa**: UoP i B2B („nasi") — pełne tło `--forest-50`, tekst Deep Forest; „Agencja" — tylko obrys `--ink-3`. Różnica jest w kształcie, nie tylko w kolorze.
+- „Nasi X · agencja Y" przy projekcie; gdy agencji więcej niż naszych — tekst `#9E4232` i ikona ostrzeżenia.
 
 ### Plakietki
 - Promień `--r-pill`, wysokość 24 px, `--text-sm` 500, ikona 10 px z odstępem 6 px.
@@ -213,14 +225,14 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 
 | Wzorzec | Gdzie | Zasada |
 |---|---|---|
-| **Karta projektu** | Mapa, oś czasu, zatwierdzanie | Nagłówek: nazwa i numer → klient, miasto → supervisor → po prawej: liczba osób, „Do zatwierdzenia: X timesheetów", „Nie wysłane: Y timesheetów", „W Dataverse do …". Pod spodem siatka: **wiersze = ludzie, kolumny = dni**. |
+| **Karta projektu** | Mapa, oś czasu, zatwierdzanie | Nagłówek: nazwa, numer, kategoria → klient, miasto → supervisor → po prawej: liczba osób, „nasi X · agencja Y", „Do zatwierdzenia: X timesheetów", „Nie wysłany: tydz. N", „W Dataverse do …". Pod spodem siatka: **wiersze = ludzie, kolumny = dni**. |
 | **Siatka dni** | Mapa, oś czasu | Nagłówek: miesiąc, pod nim numery dni. Na mapie nagłówek jest wspólny i przyklejony u góry. Weekendy piaskowe, kreska pn\|wt, przerwy kreskowane. Bez podświetlania wierszy. |
-| **Zatwierdzanie** | Supervisor, IM, administrator | Tytuł → baner terminu → (SV, IM) informacja o timesheetach po terminie → projekt → tydzień → osoby z przyciskiem „Zatwierdź". Administrator widzi też tygodnie po terminie z plakietką „Po terminie · nie wysłane do Dataverse". |
+| **Zatwierdzanie** | Supervisor, IM, administrator | Tytuł → baner terminu → (SV, IM) szara informacja o wstrzymanych timesheetach z komunikatem „Czas minął…" → projekt → „Timesheet · tydz. N" → osoby z przyciskiem „Zatwierdź" (tylko po osobie). Administrator ma na górze sekcję „Wstrzymane timesheety" z osobami, które mają błędy. |
 | **Pulpit** | Installation Manager, administrator | Baner terminu i tabela supervisorów: do zatwierdzenia (timesheety), postęp tygodnia (%), czeka na Ciebie, nie wysłane, „Przejrzyj i zatwierdź". |
 | **Drzewko** | Struktura | Linie 1.5 px `--line`. IM → projekt → supervisor → grupy (TL, elektrycy, mechanicy) **jedna pod drugą, jedna osoba w wierszu**. |
 | **Edytor projektu** | Tworzenie i edycja | Pełny ekran. Dane projektu (z zapotrzebowaniem) po lewej, „Plan zespołu" i „Historia zmian" po prawej. |
-| **Obsada** | Planning, administrator | Kafle-filtry → projekty w tygodniach → ludzie w tygodniach z „co dalej". Jedno okno „Zaplanuj dalej": przerwa → start → projekt z brakami jego branży → zadanie. |
-| **Ekran pracownika** | Telefon | Projekt dnia (albo „Przerwa") → karta dnia → „Zgłoś nieobecność" → tydzień jako lista dni z kropką stanu. Zmiany od supervisora widać pod dniem. |
+| **Obsada** | Planning, administrator | Filtry → siła robocza → projekty w tygodniach (klik = panel projektu z kandydatami) → ludzie w tygodniach (przeciągnij na tydzień projektu). Jedno okno „Zaplanuj dalej": przerwa → start → projekt → zadanie. |
+| **Ekran pracownika** | Telefon | (Szary baner wstrzymanego timesheetu) → projekt dnia (albo „Przerwa") → karta dnia → „Zgłoś nieobecność" → tydzień jako lista dni z kropką stanu. Zmiany od supervisora widać pod dniem. |
 
 ---
 
@@ -235,7 +247,7 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 
 - Polski, prosty. Nazwy z punktu widzenia użytkownika: „Zadanie", „Przerwa", „Nieobecny", a nie „assignment", „absence record".
 - Zawsze **„projekt"**, nigdy „budowa".
-- „Timesheet" = tydzień jednej osoby w jednym projekcie. Odmiana: 1 timesheet, 2 timesheety, 5 timesheetów; „na zatwierdzenie 1 timesheetu / 5 timesheetów".
+- **„Timesheet" = wszystkie godziny wszystkich pracowników jednego projektu w jednym tygodniu.** W tygodniu jest tyle timesheetów, ile projektów. Godziny to godziny, zadania to zadania — nie mieszamy tych słów. Odmiana: 1 timesheet, 2 timesheety, 5 timesheetów; „na zatwierdzenie 1 timesheetu / 5 timesheetów".
 - Puste stany mówią, co zrobić. Błędy mówią, co się stało i jak to naprawić, bez przeprosin.
 - Daty: „13 paź 2026", dni „wt, 13 paź", tygodnie „tydz. 42", godziny zdarzeń „16 paź 2026, 14:32".
 
@@ -244,7 +256,7 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 ## 9. Dostępność
 
 - Kontrast tekstu min. 4.5:1 (sprawdzone dla `--ink`, `--ink-2`, `--missed-ink` i plakietek).
-- Kolor nigdy nie jest jedyną informacją: nieobecność ma kreskę, „nie wysłane" ma kreski i wykrzyknik, wysłane ma ptaszek.
+- Kolor nigdy nie jest jedyną informacją: nieobecność ma kreskę, błąd ma kreski i wykrzyknik, wysłane ma ptaszek, tydzień zamknięty ma paski, agencja ma obrys zamiast tła.
 - Widoczny fokus klawiatury na każdym elemencie interaktywnym; kafelki zadań obsługuje się też klawiaturą (Enter, strzałki).
 - Cele dotykowe min. 44 px w aplikacji mobilnej.
 
@@ -257,5 +269,6 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 - [ ] Nigdzie suma godzin do zatwierdzenia?
 - [ ] Cień tylko na elementach pływających?
 - [ ] Liczby tabelaryczne, etykiety bez wersalików, „projekt" zamiast „budowa"?
+- [ ] Timesheet liczony jako projekt × tydzień? Zamknięty tydzień wyszarzony w paski?
 - [ ] Pusty stan i błąd mówią, co zrobić?
 - [ ] Działa na 375 px szerokości i z klawiatury?

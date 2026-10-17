@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { canApprove } from "../domain/permissions";
-import { deadlineSummary, queueFor, type DeadlineSummary, type QueueItem } from "../domain/workflow";
+import { deadlineSummary, queueFor, withheldInScope, type DeadlineSummary, type QueueItem } from "../domain/workflow";
 import { useData } from "./DataContext";
 
 // Zegar aplikacji: odświeża się co 30 s (odliczanie do terminu, blokada we wtorek o północy).
@@ -28,6 +28,6 @@ export function useQueue(): { items: QueueItem[]; summary: DeadlineSummary | nul
   return useMemo(() => {
     if (!model || !user || !canApprove(user)) return { items: [], summary: null };
     const items = queueFor(model, user, now);
-    return { items, summary: deadlineSummary(items, now) };
+    return { items, summary: deadlineSummary(items, now, withheldInScope(model, user, now).length) };
   }, [model, user, now]);
 }

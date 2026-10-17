@@ -2,6 +2,31 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje: SemVer.
 
+## [0.5.0] - 2026-10-17
+
+### Nowe funkcje
+- **Timesheet = projekt × tydzień.** Jeden timesheet to wszystkie godziny wszystkich osób jednego projektu w jednym tygodniu; w tygodniu jest tyle timesheetów, ile projektów. Liczniki, baner terminu, karty projektów i pulpit liczą timesheety w tym znaczeniu. Godziny to godziny, zadania to zadania.
+- **Tydzień zamknięty we wtorek.** Od wtorku 00:00 poprzedni tydzień jest nienaruszalny: dni są lekko wyszarzone, w ukośne paski. Kompletny timesheet idzie do Dataverse we wtorek 23:00 i dostaje ptaszek.
+- **Timesheet wstrzymany.** Jeśli w zamkniętym tygodniu choć jeden dzień nie jest zatwierdzony do końca albo brakuje wpisu w dzień roboczy z zadaniem, cały timesheet projektu nie idzie do Dataverse. Dni z błędem mają wykrzyknik („Brak wpisu", „nie wysłany"); wszyscy poza administratorem widzą: „Czas minął. Skontaktuj się z administratorem — Twój timesheet nie został wysłany z powodu błędnie wypełnionego timesheetu." Poprawia i zatwierdza tylko administrator — w sekcji „Wstrzymane timesheety" — a kompletny timesheet idzie w najbliższy wtorek.
+- **Kategorie projektów:** KNAPP, KARDEX, FORTNA, OTHER — wybór w danych projektu, etykieta przy nazwie projektu na mapie, osi czasu, w obsadzie i wyszukiwarce.
+- **Zapotrzebowanie w fazach:** PM wpisuje fazy od–do z liczbą elektryków i mechaników (np. rozruch, główna, wykończenie). Obsada liczy braki tydzień po tygodniu.
+- **Forma zatrudnienia i doświadczenie pracowników:** UoP, B2B (razem „nasi") i agencja; miesiące doświadczenia łącznie i w każdej kategorii. Widoczne w Ludziach, Obsadzie, planie zespołu i przy dodawaniu osób.
+- **Zasada „co najmniej połowa naszych":** karta projektu i Obsada pokazują „nasi X · agencja Y" i ostrzegają, gdy agencji jest więcej.
+- **Obsada 2.0** (Planning, administrator):
+  - filtry branży (obie / elektrycy / mechanicy) i kategorii;
+  - **Siła robocza** w tygodniach: potrzeba, obsadzone, brakuje, wolni i bilans (ujemny = trzeba szukać ludzi spoza obecnej załogi);
+  - **Projekty** w tygodniach z „E 4/7 · M 3/4", bieżące i przyszłe (kursywą, z datą startu); kliknięcie otwiera panel projektu;
+  - **panel projektu**: fazy z brakami, pasek nasi / agencja z kreską 50%, kandydaci dopasowani do fazy (najpierw ci, którzy mogą zacząć od startu fazy, potem nasi przed agencją, potem doświadczenie w kategorii projektu), „Dodaj" jednym kliknięciem z „Cofnij" w komunikacie, zespół fazy z usuwaniem przyszłych zadań;
+  - **Ludzie** w tygodniach: filtry zwalniają się / wolni / bez przerwy / wszyscy, sortowanie „od kiedy wolni" albo „doświadczenie", przeciąganie osoby na tydzień projektu (otwiera „Zaplanuj dalej" z tym projektem i datą).
+- Pięć przyszłych projektów w danych testowych (start za 3–13 tygodni) z zapotrzebowaniem w fazach.
+
+### Zmiany
+- Panel roboczy: wybór roli bez nachodzących na siebie ramek (osoba i „Zmień" w jednym wierszu).
+- Zatwierdzanie tylko po osobie — bez przycisku dla całego timesheetu. W tygodniu widać „Brak wpisu: …" dla dni bez wpisu.
+- Ekran pracownika: baner wstrzymanego timesheetu (kliknięcie przenosi do tego tygodnia), status dnia „zamknięte" albo „brak wpisu — nie wysłany".
+- Legenda: „Wysłane (zamknięte)" i „Błąd — nie wysłany".
+- Dane testowe v5 (kategorie, fazy, zatrudnienie, doświadczenie, 3 wstrzymane timesheety). Aplikacja zaproponuje wymianę starszych danych.
+
 ## [0.4.0] - 2026-10-16
 
 ### Nowe funkcje

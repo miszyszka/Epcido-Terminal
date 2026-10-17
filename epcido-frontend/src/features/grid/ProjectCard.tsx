@@ -7,8 +7,9 @@ import { useNow } from "../../app/hooks";
 import { MissedMark, SentMark } from "../../components/DayCell";
 import { PositionMark, ProjectDot } from "../../components/PersonBadge";
 import { projectStats } from "../../domain/aggregate";
-import { PROJECT_STATUS_LABEL } from "../../domain/labels";
+import { CATEGORY_LABEL, PROJECT_STATUS_LABEL } from "../../domain/labels";
 import { timesheetsNom } from "../../domain/workflow";
+import { isoWeek } from "../../lib/dates";
 import { canEditProject } from "../../domain/permissions";
 import type { Project } from "../../domain/types";
 import { formatDate, type ISODate } from "../../lib/dates";
@@ -71,6 +72,7 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
             <span>{project.name}</span>
           </button>
           <span className="pcard__number">{project.number}</span>
+          <span className={`cat cat--${project.category.toLowerCase()}`}>{CATEGORY_LABEL[project.category]}</span>
         </div>
         <div className="pcard__meta">
           <span>
@@ -91,11 +93,19 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
           ) : (
             <span className="muted">{peopleCount(rows.length)}</span>
           )}
+          {stats.ours + stats.agency > 0 && (
+            <span
+              className={`ours-chip ${stats.agency > stats.ours ? "is-warn" : ""}`}
+              data-tip={`Nasi (UoP i B2B): ${stats.ours}, agencja: ${stats.agency}. Cel: co najmniej połowa naszych.`}
+            >
+              nasi {stats.ours} · agencja {stats.agency}
+            </span>
+          )}
           {stats.pending > 0 && <span className="badge badge--pending">Do zatwierdzenia: {timesheetsNom(stats.pending)}</span>}
-          {stats.missed > 0 && (
-            <span className="badge badge--missed" data-tip="Nie zatwierdzone do poniedziałku 23:59 — nie poszły do Dataverse. Zatwierdza administrator.">
+          {stats.withheldWeeks.length > 0 && (
+            <span className="badge badge--missed" data-tip="Timesheet z błędami (brak zatwierdzenia albo wpisu) — nie poszedł do Dataverse. Poprawia administrator.">
               <MissedMark size={10} />
-              Nie wysłane: {timesheetsNom(stats.missed)}
+              Nie wysłany: {stats.withheldWeeks.map((w) => `tydz. ${isoWeek(w).week}`).join(", ")}
             </span>
           )}
           {stats.absences > 0 && variant === "detailed" && <span className="badge badge--neutral">{absences(stats.absences)}</span>}

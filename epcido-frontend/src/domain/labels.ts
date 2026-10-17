@@ -1,4 +1,4 @@
-import type { AbsenceType, AccessRole, DayEntry, DayState, Position, ProjectStatus, Trade } from "./types";
+import type { AbsenceType, AccessRole, DayEntry, DayState, Employment, Position, ProjectCategory, ProjectStatus, Trade } from "./types";
 
 export const POSITION_LABEL: Record<Position, string> = {
   ADMIN: "Administrator",
@@ -48,8 +48,50 @@ export const DAY_STATE_LABEL: Record<DayState, string> = {
   pending: "Do zatwierdzenia",
   absent: "Nieobecny",
   off: "Wolne lub brak wpisu",
-  missed: "Nie wysłane do Dataverse",
+  missed: "Błąd w timesheecie — nie wysłany",
 };
+
+export const CATEGORIES: ProjectCategory[] = ["KNAPP", "KARDEX", "FORTNA", "OTHER"];
+export const CATEGORY_LABEL: Record<ProjectCategory, string> = {
+  KNAPP: "KNAPP",
+  KARDEX: "KARDEX",
+  FORTNA: "FORTNA",
+  OTHER: "OTHER",
+};
+
+export const EMPLOYMENT_LABEL: Record<Employment, string> = {
+  UOP: "UoP",
+  B2B: "B2B",
+  AGENCY: "Agencja",
+};
+export const EMPLOYMENT_LONG: Record<Employment, string> = {
+  UOP: "Umowa o pracę",
+  B2B: "Kontrakt B2B",
+  AGENCY: "Pracownik agencji",
+};
+/** „Nasi" = UoP i B2B. Na projekcie co najmniej połowa powinna być nasza. */
+export function isOurs(e: { employment?: Employment }): boolean {
+  return e.employment !== "AGENCY";
+}
+
+/** Zwięźle: 8 → „8 mies.", 26 → „2 lata", 130 → „10 lat". */
+export function formatMonthsShort(m: number): string {
+  if (m <= 0) return "brak";
+  if (m < 12) return `${m} mies.`;
+  const y = Math.floor(m / 12);
+  const years = y === 1 ? "rok" : y % 10 >= 2 && y % 10 <= 4 && (y % 100 < 12 || y % 100 > 14) ? "lata" : "lat";
+  return `${y} ${years}`;
+}
+
+/** 26 → „2 lata 2 mies.", 8 → „8 mies." */
+export function formatMonths(m: number): string {
+  if (m <= 0) return "brak";
+  const y = Math.floor(m / 12);
+  const r = m % 12;
+  if (!y) return `${r} mies.`;
+  const years = y === 1 ? "rok" : y % 10 >= 2 && y % 10 <= 4 && (y % 100 < 12 || y % 100 > 14) ? "lata" : "lat";
+  return r ? `${y} ${years} ${r} mies.` : `${y} ${years}`;
+}
 
 export const ABSENCE_LABEL: Record<AbsenceType, string> = {
   SICK: "Zwolnienie lekarskie",

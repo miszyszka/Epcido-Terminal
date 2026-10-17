@@ -20,17 +20,38 @@ const BREAKS = [
  * „Zaplanuj dalej": osoba kończy zadanie → przerwa na wyjazd do domu → projekt, w którym brakuje jej branży.
  * Jedno okno zamiast szukania po kilku projektach.
  */
-export function PlanNextDialog({ outlook: o, onClose }: { outlook: PersonOutlook; onClose: () => void }) {
+export function PlanNextDialog({
+  outlook: o,
+  onClose,
+  preset,
+}: {
+  outlook: PersonOutlook;
+  onClose: () => void;
+  /** Upuszczenie osoby na projekt w Obsadzie: projekt i tydzień */
+  preset?: { projectId: string; from: ISODate };
+}) {
   const model = useModel();
   const data = useData();
   const today = todayISO();
-  const lastDay = o.releaseDate ?? (o.chain ? null : addDays(today, -1));
+  const chainEnd = o.chain && !o.chain.to.startsWith("9999") ? o.chain.to : null;
+  const lastDay = o.releaseDate ?? (o.chain ? chainEnd : addDays(today, -1));
   const base = lastDay ?? addDays(today, -1);
   const [breakDays, setBreakDays] = useState(o.stretchWeeksAtEnd >= 6 ? 7 : 0);
-  const [from, setFrom] = useState<ISODate>(() => restartDate(base, o.stretchWeeksAtEnd >= 6 ? 7 : 0));
+  const [from, setFrom] = useState<ISODate>(() => {
+    const earliest = restartDate(base, o.stretchWeeksAtEnd >= 6 ? 7 : 0);
+    return preset && preset.from > earliest ? preset.from : earliest;
+  });
   const [to, setTo] = useState<ISODate | null>(null);
-  const targets = useMemo(() => suggestTargets(model, o.employee, from, null), [model, o.employee, from]);
-  const [projectId, setProjectId] = useState<string | null>(() => targets.find((t) => t.shortage > 0)?.project.id ?? targets[0]?.project.id ?? null);
+  // Projekt z przeciągnięcia na górze listy — od razu widać, co jest wybrane
+  const targets = useMemo(() => {
+    const list = suggestTargets(model, o.employee, from, null);
+    if (!preset) return list;
+    const hit = list.find((t) => t.project.id === preset.projectId);
+    return hit ? [hit, ...list.filter((t) => t !== hit)] : list;
+  }, [model, o.employee, from, preset]);
+  const [projectId, setProjectId] = useState<string | null>(
+    () => preset?.projectId ?? targets.find((t) => t.shortage > 0)?.project.id ?? targets[0]?.project.id ?? null
+  );
   const [task, setTask] = useState(defaultTask(o.employee.trade));
   const [saving, setSaving] = useState(false);
   const trade = o.employee.trade === "MECHANICAL" ? "mechaników" : "elektryków";
@@ -132,7 +153,7 @@ export function PlanNextDialog({ outlook: o, onClose }: { outlook: PersonOutlook
                   >
                     <ProjectDot color={t.project.color} />
                     <span className="target__name">
-                      {t.project.name}
+                      {t.project.name} <span className={`cat cat--${t.project.category.toLowerCase()}`}>{t.project.category}</span>
                       {t.project.id === o.currentProject?.id && <em> · obecny</em>}
                     </span>
                     <span className="target__when">{notStarted ? `start ${formatDate(t.project.startDate)}` : `do ${ends}`}</span>

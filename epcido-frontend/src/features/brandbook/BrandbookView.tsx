@@ -6,8 +6,9 @@ import { Field, TextInput } from "../../components/Field";
 import { SelectMenu } from "../../components/SelectMenu";
 import { PageHeader } from "../../components/PageHeader";
 import { Segmented } from "../../components/Segmented";
-import { DAY_STATE_LABEL, PROJECT_COLORS } from "../../domain/labels";
-import type { DayEntry, DayState } from "../../domain/types";
+import { CategoryTag, EmploymentTag } from "../../components/PersonBadge";
+import { CATEGORIES, DAY_STATE_LABEL, PROJECT_COLORS } from "../../domain/labels";
+import type { DayEntry, DayState, Employee } from "../../domain/types";
 import { todayISO } from "../../lib/dates";
 
 const BRAND = [
@@ -36,12 +37,13 @@ const SAMPLE: Record<DayState, DayEntry | undefined> = {
 };
 
 const NOW = Date.now();
+// Przykład zawsze w tym samym tygodniu: termin pn 19 paź 23:59, wysyłka wt 20 paź 23:00
 const BANNER = {
   week: "2026-10-12",
   approveBy: "2026-10-19",
-  lockAt: new Date(NOW + 3 * 86_400_000),
-  exportAt: new Date(NOW + 3 * 86_400_000 + 23 * 3_600_000),
-  timesheets: 24,
+  lockAt: new Date("2026-10-20T00:00:00"),
+  exportAt: new Date("2026-10-20T23:00:00"),
+  timesheets: 12,
   later: 0,
   laterApproveBy: null,
   missed: 0,
@@ -114,8 +116,8 @@ export function BrandbookView() {
           ))}
           <div className="bb-state">
             <div className="bb-state__cells">
-              <DayCell state="approved" size="map" sent label="Wysłane do Dataverse" />
-              <DayCard entry={{ ...SAMPLE.approved!, exported: true }} state="approved" sent />
+              <DayCell state="approved" size="map" sent closed label="Wysłane do Dataverse" />
+              <DayCard entry={{ ...SAMPLE.approved!, exported: true }} state="approved" sent closed />
               <DayCard
                 entry={{ ...SAMPLE.approved!, history: [{ at: new Date(NOW).toISOString(), byId: "sv-1", byName: "Supervisor 1", text: "7:00–18:00 → 7:00–17:00" }] }}
                 state="approved"
@@ -125,6 +127,15 @@ export function BrandbookView() {
               <DayCell state="off" size="map" planned label="Zaplanowany dzień" />
             </div>
             <strong>Wysłane do Dataverse, zmienione przez supervisora, dziś, dzień zaplanowany</strong>
+          </div>
+          <div className="bb-state">
+            <div className="bb-state__cells">
+              <DayCell state="approved" size="map" closed label="Tydzień zamknięty" />
+              <DayCell state="off" size="map" closed label="Tydzień zamknięty, wolne" />
+              <DayCard entry={SAMPLE.approved} state="approved" closed />
+              <DayCard entry={undefined} state="missed" closed missing expected />
+            </div>
+            <strong>Tydzień zamknięty, brak wpisu</strong>
           </div>
         </div>
       </section>
@@ -176,8 +187,16 @@ export function BrandbookView() {
             <span className="badge badge--approved">Zatwierdzone</span>
             <span className="badge badge--pending">12 timesheetów do zatwierdzenia</span>
             <span className="badge badge--absent">3 dni nieob.</span>
-            <span className="badge badge--missed">Nie wysłane</span>
+            <span className="badge badge--missed">Nie wysłany: tydz. 41</span>
             <span className="badge badge--status badge--active">W realizacji</span>
+          </div>
+          <div className="bb-row">
+            {CATEGORIES.map((c) => (
+              <CategoryTag key={c} category={c} />
+            ))}
+            {(["UOP", "B2B", "AGENCY"] as const).map((e) => (
+              <EmploymentTag key={e} employee={{ id: e, name: e, position: "ELECTRICIAN", employment: e } as Employee} />
+            ))}
           </div>
           <DeadlineBanner summary={{ ...BANNER, remainingMs: 3 * 86_400_000 + 3_600_000, urgent: false }} />
           <DeadlineBanner summary={{ ...BANNER, timesheets: 5, remainingMs: 5 * 3_600_000, urgent: true }} />

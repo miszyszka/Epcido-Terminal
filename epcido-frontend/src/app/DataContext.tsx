@@ -8,6 +8,7 @@ import * as commands from "../data/commands";
 import { CommandError, type Actor, type DraftAssignment } from "../data/commands";
 import { createMemoryRepository, resetDemoStorage } from "../data/memoryRepo";
 import { todayISO, type ISODate } from "../lib/dates";
+import { newId } from "../lib/random";
 import { useSession } from "./SessionContext";
 import { useUi } from "./UiContext";
 
@@ -79,6 +80,9 @@ interface DataValue {
     approveLevel?: QueueLevel | null;
   }) => Promise<boolean>;
   planAssignment: (args: { employeeId: string; projectId: string; from: ISODate; to: ISODate | null; task: string; breakDays?: number }) => Promise<boolean>;
+  /** Obsada: dodanie jednym kliknięciem z możliwością cofnięcia */
+  quickAssign: (args: { employeeId: string; projectId: string; from: ISODate; to: ISODate | null; task: string; breakDays?: number }) => Promise<boolean>;
+  removeAssignment: (assignmentId: string) => Promise<boolean>;
   insertBreak: (args: { assignmentId: string; from: ISODate; days: number }) => Promise<boolean>;
   loadTestData: () => Promise<boolean>;
   clearData: () => Promise<boolean>;
@@ -207,6 +211,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
         commit((s, a) => commands.editEntry(s, a, args), args.approveLevel ? "Zapisano i zatwierdzono" : "Zmiana zapisana w notatce dnia"),
       planAssignment: (args) => commit((s, a) => commands.planAssignment(s, a, args), "Zaplanowano"),
       insertBreak: (args) => commit((s, a) => commands.insertBreak(s, a, args), "Przerwa wstawiona"),
+      async quickAssign(args) {
+        const id = newId("a");
+        let label = "";
+        const ok = await commit((s, a) => {
+          const changes = commands.planAssignment(s, a, { ...args, id });
+          label = changes.audit[0]?.summary.replace(/^Zaplanowano /, "") ?? "";
+          return changes;
+        });
+        if (ok)
+          toast(`Dodano: ${label}`, "info", {
+            label: "Cofnij",
+            run: () => void commit((s, a) => commands.removeAssignment(s, a, { assignmentId: id, reason: "Cofnięto" }), "Cofnięto"),
+          });
+        return ok;
+      },
+      removeAssignment: (assignmentId) => commit((s, a) => commands.removeAssignment(s, a, { assignmentId }), "Usunięto z planu"),
       loadTestData: () => commit((_s, a) => commands.loadTestData(a, todayISO()), "Dane testowe wgrane"),
       async clearData() {
         const ok = await commit((s, a) => commands.clearData(s, a), "Dane testowe usunięte");
@@ -247,8 +267,17 @@ const POSITION_ORDER: Employee["position"][] = ["SUPERVISOR", "TEAM_LEADER", "EL
 
 export function buildModel(snapshot: Snapshot): Model {
   const employees = [...snapshot.employees].sort(byName);
+  // Zgodność wstecz: projekty z wersji 0.4 miały needElectricians/needMechanics zamiast faz, bez kategorii.
   const projects = [...snapshot.projects]
-    .map((p) => ({ ...p, projectManagerId: p.projectManagerId ?? null }))
+    .map((p) => {
+      const legacy = p as Project & { needElectricians?: number | null; needMechanics?: number | null };
+      const demand =
+        p.demand ??
+        (legacy.needElectricians || legacy.needMechanics
+          ? [{ id: `${p.id}-d1`, from: p.startDate, to: p.endDate ?? p.startDate, electricians: legacy.needElectricians ?? 0, mechanics: legacy.needMechanics ?? 0 }]
+          : []);
+      return { ...p, projectManagerId: p.projectManagerId ?? null, category: p.category ?? "OTHER", demand };
+    })
     .sort((a, b) => a.number.localeCompare(b.number, "pl", { numeric: true }));
   // Zgodność wstecz: przypisania z wersji 0.2 miały pole `since` zamiast `from`.
   const assignments = snapshot.assignments.map((a) => {

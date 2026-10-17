@@ -7,10 +7,16 @@ export type EditorTab = "team" | "history";
 /** Dzień otwarty do podglądu lub zmiany (oś czasu, zatwierdzanie). */
 export type EntryRef = { projectId: string; employeeId: string; date: string } | null;
 
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 export interface Toast {
   id: number;
   message: string;
   tone: "info" | "error";
+  action?: ToastAction;
 }
 
 interface UiValue {
@@ -24,7 +30,8 @@ interface UiValue {
   openEntry: (ref: NonNullable<EntryRef>) => void;
   closeEntry: () => void;
   toasts: Toast[];
-  toast: (message: string, tone?: Toast["tone"]) => void;
+  toast: (message: string, tone?: Toast["tone"], action?: ToastAction) => void;
+  dismissToast: (id: number) => void;
 }
 
 const UiContext = createContext<UiValue | null>(null);
@@ -36,11 +43,12 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
 
-  const toast = useCallback((message: string, tone: Toast["tone"] = "info") => {
+  const toast = useCallback((message: string, tone: Toast["tone"] = "info", action?: ToastAction) => {
     const id = nextId.current++;
-    setToasts((t) => [...t.slice(-2), { id, message, tone }]);
-    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === "error" ? 7000 : 3200);
+    setToasts((t) => [...t.slice(-2), { id, message, tone, action }]);
+    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === "error" || action ? 7000 : 3200);
   }, []);
+  const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
   const openNewProject = useCallback(() => setEditor({ projectId: null, tab: "team", rev: Date.now() }), []);
   const openProject = useCallback(
@@ -52,8 +60,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const closeEntry = useCallback(() => setEntryEditor(null), []);
 
   const value = useMemo<UiValue>(
-    () => ({ search, setSearch, editor, openNewProject, openProject, closeEditor, entryEditor, openEntry, closeEntry, toasts, toast }),
-    [search, editor, openNewProject, openProject, closeEditor, entryEditor, openEntry, closeEntry, toasts, toast]
+    () => ({ search, setSearch, editor, openNewProject, openProject, closeEditor, entryEditor, openEntry, closeEntry, toasts, toast, dismissToast }),
+    [search, editor, openNewProject, openProject, closeEditor, entryEditor, openEntry, closeEntry, toasts, toast, dismissToast]
   );
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;
