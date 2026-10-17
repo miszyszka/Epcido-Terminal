@@ -1,12 +1,12 @@
 import { AlarmClock, CheckCircle2 } from "lucide-react";
-import { formatRemaining, timesheetsGen, timesheetsNom, type DeadlineSummary } from "../domain/workflow";
+import { approveTime, exportTime, formatRemaining, timesheetsGen, timesheetsNom, type DeadlineSummary } from "../domain/workflow";
 import { formatDay, toISO } from "../lib/dates";
 import { plural } from "../lib/text";
 import { MissedMark } from "./DayCell";
 
 /**
- * Ile czasu zostało do terminu i ile timesheetów jest do zatwierdzenia.
- * Gdy zostały już tylko godziny (mniej niż doba do poniedziałku 23:59) — baner jest czerwony.
+ * Ile czasu zostało do terminu i ile timesheetów jest do zatwierdzenia. Płaska karta: po lewej stan,
+ * po prawej termin i wysyłka. Gdy zostały już tylko godziny (mniej niż doba) — ikona i liczba na czerwono.
  */
 export function DeadlineBanner({ summary, isAdmin }: { summary: DeadlineSummary; isAdmin?: boolean }) {
   const done = summary.timesheets === 0 && summary.later === 0;
@@ -14,7 +14,7 @@ export function DeadlineBanner({ summary, isAdmin }: { summary: DeadlineSummary;
   return (
     <section className={`deadline-banner ${urgent ? "is-urgent" : ""} ${done ? "is-done" : ""}`} aria-live="polite">
       <span className="deadline-banner__icon" aria-hidden>
-        {done ? <CheckCircle2 size={26} strokeWidth={1.8} /> : <AlarmClock size={26} strokeWidth={1.8} />}
+        {done ? <CheckCircle2 size={22} strokeWidth={1.9} /> : <AlarmClock size={22} strokeWidth={1.9} />}
       </span>
       <div className="deadline-banner__text">
         {done ? (
@@ -27,27 +27,30 @@ export function DeadlineBanner({ summary, isAdmin }: { summary: DeadlineSummary;
           </p>
         ) : (
           <p className="deadline-banner__main">
-            <strong>{timesheetsNom(summary.later)}</strong> do zatwierdzenia do {formatDay(summary.laterApproveBy!)}, 23:59
+            <strong>{timesheetsNom(summary.later)}</strong> do zatwierdzenia do {formatDay(summary.laterApproveBy!)}, {approveTime()}
           </p>
         )}
-        <p className="deadline-banner__sub">
-          Termin: <strong>{formatDay(summary.approveBy)}, 23:59</strong>
-          <span aria-hidden> · </span>
-          wysyłka do Dataverse: <strong>{formatDay(toISO(summary.exportAt))}, 23:00</strong>
-          {summary.timesheets > 0 && summary.later > 0 && summary.laterApproveBy && (
-            <>
-              <span aria-hidden> · </span>
-              potem {timesheetsNom(summary.later)} do {formatDay(summary.laterApproveBy)}
-            </>
-          )}
-        </p>
+        {summary.timesheets > 0 && summary.later > 0 && summary.laterApproveBy && (
+          <p className="deadline-banner__sub">
+            Potem {timesheetsNom(summary.later)} do {formatDay(summary.laterApproveBy)}, {approveTime()}
+          </p>
+        )}
         {isAdmin && summary.missed > 0 && (
           <p className="deadline-banner__missed">
             <MissedMark size={12} />
-            {timesheetsNom(summary.missed)} {plural(summary.missed, "wstrzymany", "wstrzymane", "wstrzymanych")} — nie poszły do Dataverse. Poprawić i zatwierdzić je możesz tylko Ty; pójdą w najbliższy
-            wtorek.
+            {timesheetsNom(summary.missed)} {plural(summary.missed, "wstrzymany", "wstrzymane", "wstrzymanych")} — nie poszły do Dataverse. Poprawić i zatwierdzić je możesz tylko Ty;
+            pójdą w najbliższą wysyłkę.
           </p>
         )}
+      </div>
+      <div className="deadline-banner__when">
+        <span>Termin</span>
+        <b>
+          {formatDay(summary.approveBy)}, {approveTime()}
+        </b>
+        <span>
+          wysyłka do Dataverse {formatDay(toISO(summary.exportAt))}, {exportTime()}
+        </span>
       </div>
     </section>
   );

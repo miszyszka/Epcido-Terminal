@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 
 /** Edytor projektu na pełnym ekranie: null = zamknięty, projectId null = nowy projekt. */
-export type EditorState = { projectId: string | null; tab: EditorTab; rev: number } | null;
+export type EditorState = { projectId: string | null; tab: EditorTab; rev: number; focus?: boolean } | null;
 export type EditorTab = "team" | "history";
 
 /** Dzień otwarty do podglądu lub zmiany (oś czasu, zatwierdzanie). */
@@ -24,7 +24,8 @@ interface UiValue {
   setSearch: (value: string) => void;
   editor: EditorState;
   openNewProject: () => void;
-  openProject: (projectId: string, tab?: EditorTab) => void;
+  /** focus: plan zespołu na całą szerokość (dane projektu zwinięte) — np. z Obsady */
+  openProject: (projectId: string, tab?: EditorTab, focus?: boolean) => void;
   closeEditor: () => void;
   entryEditor: EntryRef;
   openEntry: (ref: NonNullable<EntryRef>) => void;
@@ -52,7 +53,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
 
   const openNewProject = useCallback(() => setEditor({ projectId: null, tab: "team", rev: Date.now() }), []);
   const openProject = useCallback(
-    (projectId: string, tab: EditorTab = "team") => setEditor({ projectId, tab, rev: Date.now() }),
+    (projectId: string, tab: EditorTab = "team", focus = false) => setEditor({ projectId, tab, rev: Date.now(), focus }),
     []
   );
   const closeEditor = useCallback(() => setEditor(null), []);

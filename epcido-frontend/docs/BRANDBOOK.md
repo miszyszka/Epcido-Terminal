@@ -1,6 +1,6 @@
 # Epcido Terminal — brandbook interfejsu
 
-> Wersja 1.3 · obowiązuje dla wszystkich modułów (planowanie, czas pracy, zatwierdzanie, obsada, komunikacja, aplikacja mobilna).
+> Wersja 1.4 · obowiązuje dla wszystkich modułów (planowanie, czas pracy, zatwierdzanie, obsada, komunikacja, aplikacja mobilna).
 > Źródło prawdy w kodzie: `src/styles/tokens.css`. Żywy podgląd: ekran **Brandbook** w aplikacji (`/brandbook`).
 > Zmiana tokenu = zmiana w tym pliku + w `tokens.css` w tym samym commicie.
 
@@ -76,7 +76,21 @@ Znaczniki na dniu:
 - Komunikat dla wszystkich poza administratorem przy wstrzymanym timesheecie, zawsze tymi słowami: „Czas minął. Skontaktuj się z administratorem — Twój timesheet nie został wysłany z powodu błędnie wypełnionego timesheetu."
 - Plakietki stanów (tekst) używają jasnych odcieni: `--golden-100` z tekstem `#7A5208`, `--terracotta-100` z tekstem `#9E4232`, `--forest-50` z tekstem Deep Forest, `#E6EAE9` z tekstem `--missed-ink`.
 
-### 2.4 Kolory identyfikacyjne projektów
+### 2.4 Branże: elektrycy i mechanicy
+
+W całym systemie branża ma stały kolor. To kolor **identyfikacyjny**, nie stan — nigdy nie wypełnia dnia.
+
+| Branża | Kolor | Ciemny (tekst) | Jasny (tło) | Obrys |
+|---|---|---|---|---|
+| **Elektrycy** | `--el` `#D2373C` | `#A3222A` | `#FBE4E3` | `#F0B3B1` |
+| **Mechanicy** | `--me` `#2B67D1` | `#1D4B99` | `#E1EBFB` | `#B3CBF2` |
+
+- Znacznik stanowiska: **E** na jasnej czerwieni, **M** na jasnym błękicie; **TL** ma kreskę u dołu w kolorze swojej branży.
+- Słupki obsady (Obsada, plan zespołu), wykres siły roboczej, liczby „6 → 5 z 8" przy wnioskach urlopowych.
+- Kolejność zawsze: elektrycy (czerwień) przed mechanikami (błękit).
+- Czerwień elektryków jest chłodniejsza i ciemniejsza niż Terracotta nieobecności — nie stoją obok siebie w jednej komórce.
+
+### 2.5 Kolory identyfikacyjne projektów
 
 Projekt ma kolor jako kropkę przy nazwie, pasek zadania w Obsadzie i delikatne tło tygodni projektu (12%). Paleta jest rozstawiona po całym kole barw, o podobnej jasności, i omija żółć oraz czerwień stanów:
 
@@ -156,11 +170,15 @@ Zasady:
 Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego słowa: „Zaplanuj" → „Zaplanowano".
 
 ### Baner terminu
-- Karta z gradientem Golden 100 → biały, ikona budzika w kwadracie 52 px.
-- Treść: „Masz **3 dni i 1 godzinę** na zatwierdzenie **13 timesheetów**" (300 + 800), pod spodem lekki wiersz: termin (pn 23:59) i wysyłka (wt 23:00).
-- Mniej niż doba do terminu → gradient Terracotta 100, ikona na Terracotta.
-- Wszystko zatwierdzone → gradient Forest 50, ptaszek.
-- **Nigdy nie pokazujemy sumy godzin do zatwierdzenia** — liczy się czas do terminu i liczba timesheetów (timesheet = tydzień jednej osoby w projekcie).
+- **Płaska biała karta, bez gradientu**, obrys `--line-soft`. Ikona budzika w kwadracie 44 px na Golden 100.
+- Po lewej: „Masz **3 dni i 1 godzinę** na zatwierdzenie **13 timesheetów**" (300 + 800). Po prawej, za pionową linią: „Termin" i **pn, 19 paź, 23:59**, pod spodem wysyłka do Dataverse. Godziny z ustawień systemu.
+- Mniej niż doba do terminu → ikona na Terracotta, liczba czasu w `#9E4232`, obrys Terracotta 100.
+- Wszystko zatwierdzone → ikona ptaszka na Forest 50.
+- **Nigdy nie pokazujemy sumy godzin do zatwierdzenia** — liczy się czas do terminu i liczba timesheetów (timesheet = projekt × tydzień).
+
+### Dock
+- Pigułka na wysokość ikon. Grupy rozdzielone kreską: ekrany → narzędzia Planningu (Obsada, piaskowe tło) → narzędzia administratora (Raporty, Użytkownicy, Ustawienia — **same ikony**, nazwa w dymku; aktywna z nazwą).
+- **Licznik** (do zatwierdzenia, wnioski urlopowe) to złota pigułka 20 px **za nazwą, w jednej linii**, wyśrodkowana w pionie — nigdy nad ikoną.
 
 ### Okno dnia (notatka zmian)
 - Otwiera się po kliknięciu dnia na osi czasu i w zatwierdzaniu.
@@ -197,20 +215,39 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 - Kolizja z innym projektem lub innym zadaniem: tło `--terracotta-100`, obrys `#9E4232`.
 - Ta sama osoba w innych projektach: szary kreskowany pasek z kreską w kolorze projektu.
 - Oś sięga zawsze **3 miesiące za najdalsze zadanie** i rośnie podczas przeciągania.
+- **Kolumna nazwisk 300 px**: pełne imię i nazwisko (do dwóch linii), pod spodem umowa i liczba zadań. Wiersz 48 px.
+- **Wiersz „Zapotrzebowanie"** na górze: w każdym tygodniu dwa poziome słupki E i M — kreskowany obrys = potrzeba, wypełnienie w kolorze branży = w planie, „6/8".
+- **Urlop na wierszu osoby**: blok nad zadaniem — zaakceptowany: Terracotta w ukośne paski z napisem „Urlop · Supervisor 3"; L4: ciemna Terracotta „L4"; wniosek czekający: biało-złote paski z obrysem Golden „Wniosek o urlop". Dymek: kto i kiedy zaakceptował.
+- Otwarty z Obsady: dane projektu zwinięte do paska po lewej, plan na całą szerokość.
 
 ### Obsada
-- U góry dwa przełączniki-filtry (branża, kategoria) i jedno zdanie podsumowania.
-- Wszystkie siatki mają te same kolumny tygodni (od bieżącego), szerokość kolumny 56 px, nazwa `--staff-name` 230 px, kolumna boczna `--staff-side` 250 px.
-- **Siła robocza**: wiersze potrzeba / obsadzone / brakuje / wolni / bilans. Braki i ujemny bilans na `--terracotta-100` z tekstem `#9E4232` — to stan.
-- **Projekty × tygodnie**: tło tygodni w kolorze projektu (12%), w komórce „E 4/7 · M 3/4". Obsadzony — Deep Forest, brak — `#9E4232` grubo, bez zapotrzebowania — `--ink-2`. Koniec projektu: pionowa kreska w kolorze projektu z napisem „koniec". Przyszłe projekty: nazwa kursywą, „start … · za N tyg.". Wybrany projekt: obrys Deep Forest po lewej. Cel upuszczenia: przerywany obrys.
-- **Panel projektu** (szuflada z prawej, 460 px): fazy jako karty z „Elektrycy 1/3 · Mechanicy 1/2", pasek nasi / agencja z kreską 50%, kandydaci (stanowisko, osoba, umowa, doświadczenie w kategorii, od kiedy) z przyciskiem „Dodaj", zespół fazy.
-- **Ludzie × tygodnie**: uchwyt do przeciągania, osoba z umową, „Projekt 6 · kończy cz, 22 paź", doświadczenie „KNAPP 4 lata · łącznie 10 lat". Paski w kolorach projektów, przerwy piaskowe z ikoną kubka, linia „dziś". Po prawej: „wolny od …", podpowiedź projektu z brakiem, przyciski „Zaplanuj" / „Przerwa".
-- Dodanie osoby kończy się komunikatem z „Cofnij".
+- U góry dwa przełączniki-filtry (branża, kategoria) i jedno zdanie, jak przeciągać.
+- **Wymaga uwagi**: karty 340 px w siatce — ikona (czerwona: braki przed startem, tygodnie bez rezerwy; złota: za mało EPCIDO, długo bez przerwy; zielona: urlopy, ludzie bez przydziału), jedno zdanie z nazwą projektu pogrubioną i jeden przycisk akcji.
+- Wszystkie siatki mają te same kolumny tygodni (od bieżącego), szerokość 56 px, nazwa `--staff-name` 230 px, kolumna boczna `--staff-side` 250 px.
+- **Siła robocza**: wykres 132 px — w każdym tygodniu dwa słupki (E, M): wypełnienie w kolorze branży = w planie, ciemny obrys = potrzeba (czerwony, gdy brakuje), szare kreski nad wypełnieniem = wolni. Pod spodem wiersze brakuje / wolni / bilans.
+- **Projekty × tygodnie**: tło tygodni w kolorze projektu (12%), w komórce **dwa pionowe słupki**: kreskowany obrys w kolorze branży = potrzeba, wypełnienie = w planie, białe kreski u góry wypełnienia = na urlopie. Pod słupkiem liczba w planie albo brak „−2" w `#9E4232`. Skala słupków — największa wartość w wierszu projektu.
+- Pod nazwą projektu: „koniec … · za N tyg." i „EPCIDO 64% · 11 os." (poniżej celu — `#9E4232`). Po prawej najbliższy brak i ikona „Zaproponuj obsadę".
+- **Przeciąganie**: cel to tydzień projektu (obrys Deep Forest, nad komórką ciemna etykieta „Mechanik 24: 23 lis – 5 gru"). Upuszczenie dodaje osobę do końca fazy z „Cofnij"; z Shift — okno z opcjami.
+- **Propozycja obsady** (okno lg, 900 px): grupy faza × branża z „2/8 · brakuje 6", wiersze z polem wyboru (stanowisko, osoba, umowa, staż w kategorii, od kiedy, urlop w fazie, „teraz Projekt 2 do 27 lis"). Na dole: „Zaznaczono 13 · EPCIDO po zmianie: 64%".
+- **Ludzie × tygodnie**: uchwyt, osoba z umową, „Projekt 6 · kończy cz, 22 paź", staż „KNAPP 4 lata · łącznie 10 lat". Paski projektów, przerwy piaskowe z kubkiem, urlopy w paski Terracotty (wniosek — złote), linia „dziś". Po prawej: „wolny od …", podpowiedź projektu z brakiem, „Zaplanuj" / „Przerwa".
+- Filtry ludzi: EPCIDO / agencja i suwaki „Staż łącznie od …", „Staż w KNAPP od …" (te same w ekranie Ludzie).
+
+### Urlopy
+- **Wniosek do akceptacji**: karta w czterech kolumnach — osoba i data wniosku · rodzaj (etykieta „Urlop" / „L4" / „Inna"), daty, dni robocze, uwagi · wpływ na projekt („Projekt 3 · elektrycy w tygodniu 19.10: **6 → 5 z 8**", poniżej potrzeby — na Terracotta 100) i kto jeszcze ma wolne · „Odrzuć" (cichy; wymaga powodu) i „Akceptuj" (główny).
+- **Kalendarz nieobecności**: 8 tygodni po 22 px na dzień, wiersz 36 px. Urlop — Terracotta, L4 — `#9E4232`, wniosek — biało-złote paski z obrysem Golden.
+- Rodzaje: „Urlop" (Terracotta 100, tekst `#9E4232`), „L4" (Terracotta, biały tekst), „Inna" (szara z obrysem).
+- Pracownik: „Zgłoś urlop albo L4", lista „Moje wnioski" ze stanem (czeka — złota plakietka, zaakceptował X — zielona, odrzucony z powodem). L4 obowiązuje od razu.
+
+### Administracja
+- **Użytkownicy**: tabela z liczbą uprawnień w zielonej pigułce i „+2 dodane" / „−1 odebrane". Okno lg: dane, rola z opisem, uprawnienia w grupach (Projekty, Planowanie, Godziny, Urlopy, Administracja) — przy każdym „z roli", „dodane" (zielone), „odebrane" (`#9E4232`).
+- **Raporty**: po lewej kafle raportów (aktywny — obrys Deep Forest), po prawej opcje (zakres dat z gotowymi okresami, kategorie i projekty jako chipy, branża, umowa, stan godzin) i podgląd 8 wierszy z przyciskiem „Pobierz Excel (.xlsx)".
+- **Ustawienia**: karty w dwóch kolumnach (Terminy z przykładem na bieżący tydzień, Integracja Dataverse, Kategorie, Oddziały, Zasady obsady na całą szerokość). Pozycji używanych w projektach nie da się usunąć.
 
 ### Kategorie i umowy
 - **Kategoria projektu** (KNAPP, KARDEX, FORTNA, OTHER): mała etykieta 20 px, promień 6 px, wersaliki są nazwą własną, nie stylem. Barwy przygaszone i stałe: KNAPP `#1D4F7A` na `#EEF4F9`, KARDEX `#6B3F12` na `#FAF3EA`, FORTNA `#4B2F78` na `#F4F0FA`, OTHER `--ink-2` na `--surface-2`. Nigdy Golden ani Terracotta.
-- **Umowa**: UoP i B2B („nasi") — pełne tło `--forest-50`, tekst Deep Forest; „Agencja" — tylko obrys `--ink-3`. Różnica jest w kształcie, nie tylko w kolorze.
-- „Nasi X · agencja Y" przy projekcie; gdy agencji więcej niż naszych — tekst `#9E4232` i ikona ostrzeżenia.
+- **Umowa**: UoP i B2B (**EPCIDO**) — pełne tło `--forest-50`, tekst Deep Forest; „Agencja" — tylko obrys `--ink-3`. Różnica jest w kształcie, nie tylko w kolorze.
+- Udział EPCIDO przy projekcie: „EPCIDO 64%". Poniżej minimum z ustawień (domyślnie 50%) — tekst `#9E4232`.
+- Kategorie dodane w ustawieniach (np. AUTOSTORE) mają neutralną etykietę: `--ink-2` na `--surface-2`.
 
 ### Plakietki
 - Promień `--r-pill`, wysokość 24 px, `--text-sm` 500, ikona 10 px z odstępem 6 px.
@@ -225,14 +262,16 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 
 | Wzorzec | Gdzie | Zasada |
 |---|---|---|
-| **Karta projektu** | Mapa, oś czasu, zatwierdzanie | Nagłówek: nazwa, numer, kategoria → klient, miasto → supervisor → po prawej: liczba osób, „nasi X · agencja Y", „Do zatwierdzenia: X timesheetów", „Nie wysłany: tydz. N", „W Dataverse do …". Pod spodem siatka: **wiersze = ludzie, kolumny = dni**. |
+| **Karta projektu** | Mapa, oś czasu, zatwierdzanie | Nagłówek: nazwa, numer, kategoria → klient, miasto → supervisor → po prawej **tylko to, co wymaga działania**: „Do zatwierdzenia: X timesheetów" (złota) i „! Nie wysłany: tydz. N" (czerwona). Wysłane widać po ptaszkach i paskach — bez „W Dataverse do…" i bez liczby osób. Pod spodem siatka: **wiersze = ludzie, kolumny = dni**. |
 | **Siatka dni** | Mapa, oś czasu | Nagłówek: miesiąc, pod nim numery dni. Na mapie nagłówek jest wspólny i przyklejony u góry. Weekendy piaskowe, kreska pn\|wt, przerwy kreskowane. Bez podświetlania wierszy. |
 | **Zatwierdzanie** | Supervisor, IM, administrator | Tytuł → baner terminu → (SV, IM) szara informacja o wstrzymanych timesheetach z komunikatem „Czas minął…" → projekt → „Timesheet · tydz. N" → osoby z przyciskiem „Zatwierdź" (tylko po osobie). Administrator ma na górze sekcję „Wstrzymane timesheety" z osobami, które mają błędy. |
 | **Pulpit** | Installation Manager, administrator | Baner terminu i tabela supervisorów: do zatwierdzenia (timesheety), postęp tygodnia (%), czeka na Ciebie, nie wysłane, „Przejrzyj i zatwierdź". |
 | **Drzewko** | Struktura | Linie 1.5 px `--line`. IM → projekt → supervisor → grupy (TL, elektrycy, mechanicy) **jedna pod drugą, jedna osoba w wierszu**. |
 | **Edytor projektu** | Tworzenie i edycja | Pełny ekran. Dane projektu (z zapotrzebowaniem) po lewej, „Plan zespołu" i „Historia zmian" po prawej. |
-| **Obsada** | Planning, administrator | Filtry → siła robocza → projekty w tygodniach (klik = panel projektu z kandydatami) → ludzie w tygodniach (przeciągnij na tydzień projektu). Jedno okno „Zaplanuj dalej": przerwa → start → projekt → zadanie. |
-| **Ekran pracownika** | Telefon | (Szary baner wstrzymanego timesheetu) → projekt dnia (albo „Przerwa") → karta dnia → „Zgłoś nieobecność" → tydzień jako lista dni z kropką stanu. Zmiany od supervisora widać pod dniem. |
+| **Obsada** | Planning, administrator | Filtry → wymaga uwagi → wykres siły roboczej → projekty w tygodniach ze słupkami E/M (klik = plan zespołu) → ludzie w tygodniach z filtrami stażu (przeciągnij na tydzień projektu). Propozycja obsady jednym oknem. |
+| **Urlopy** | SV, IM, HR, administrator | Do akceptacji (karty z wpływem na obsadę) → L4 do potwierdzenia → kalendarz nieobecności → ostatnie decyzje (z „Cofnij"). |
+| **Administracja** | Administrator | Raporty, Użytkownicy, Ustawienia — w docku jako same ikony. Każda zmiana i każde pobranie raportu w dzienniku. |
+| **Ekran pracownika** | Telefon | Projekt dnia (albo „Przerwa") → karta dnia → „Zgłoś urlop albo L4" → tydzień jako lista dni z kropką stanu → „Moje wnioski". Bez informacji o wysyłce i wstrzymaniu. Zmiany od supervisora widać pod dniem. |
 
 ---
 
@@ -247,6 +286,10 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 
 - Polski, prosty. Nazwy z punktu widzenia użytkownika: „Zadanie", „Przerwa", „Nieobecny", a nie „assignment", „absence record".
 - Zawsze **„projekt"**, nigdy „budowa".
+- Zawsze **„EPCIDO"** (wersalikami — nazwa własna) dla naszych ludzi na UoP i B2B, nigdy „nasi". Przeciwieństwo: „agencja".
+- Branże w liczbie mnogiej: „Elektrycy", „Mechanicy"; skróty w słupkach: E, M.
+- Urlopy: „wniosek", „zaakceptował", „odrzucony" (z powodem), „L4 — obowiązuje od zgłoszenia", „dokument potwierdzony".
+- Pracownik i Team Leader nie widzą słów „wysłane", „wstrzymany", „Dataverse" — dla nich tydzień jest po prostu „zamknięty".
 - **„Timesheet" = wszystkie godziny wszystkich pracowników jednego projektu w jednym tygodniu.** W tygodniu jest tyle timesheetów, ile projektów. Godziny to godziny, zadania to zadania — nie mieszamy tych słów. Odmiana: 1 timesheet, 2 timesheety, 5 timesheetów; „na zatwierdzenie 1 timesheetu / 5 timesheetów".
 - Puste stany mówią, co zrobić. Błędy mówią, co się stało i jak to naprawić, bez przeprosin.
 - Daty: „13 paź 2026", dni „wt, 13 paź", tygodnie „tydz. 42", godziny zdarzeń „16 paź 2026, 14:32".
@@ -270,5 +313,7 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 - [ ] Cień tylko na elementach pływających?
 - [ ] Liczby tabelaryczne, etykiety bez wersalików, „projekt" zamiast „budowa"?
 - [ ] Timesheet liczony jako projekt × tydzień? Zamknięty tydzień wyszarzony w paski?
+- [ ] Elektrycy czerwień, mechanicy błękit — i tylko przy branży? „EPCIDO" zamiast „nasi"?
+- [ ] Liczniki w jednej linii z nazwą (dock)? Bez gradientów na kartach?
 - [ ] Pusty stan i błąd mówią, co zrobić?
 - [ ] Działa na 375 px szerokości i z klawiatury?

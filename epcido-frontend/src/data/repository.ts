@@ -5,9 +5,9 @@
 // jednym atomowym batchem, w trybie demo w pamięci. Przy przejściu na docelowy backend
 // (PostgreSQL + API) wymieniamy tylko implementację tego interfejsu.
 
-import type { AuditEvent, Dataset } from "../domain/types";
+import type { AuditEvent, Dataset, SystemSettings } from "../domain/types";
 
-export type CollectionName = "employees" | "projects" | "assignments" | "timesheets";
+export type CollectionName = "employees" | "projects" | "assignments" | "timesheets" | "leaves";
 
 export interface Write {
   collection: CollectionName | "meta";
@@ -32,6 +32,8 @@ export interface Snapshot extends Dataset {
   seeded: boolean;
   /** Wersja wgranych danych testowych (meta/seed.version) */
   seedVersion: number | null;
+  /** Ustawienia systemu (meta/settings); null = domyślne */
+  settings: Partial<SystemSettings> | null;
 }
 
 export interface RepoError {

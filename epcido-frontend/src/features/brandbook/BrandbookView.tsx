@@ -7,7 +7,7 @@ import { SelectMenu } from "../../components/SelectMenu";
 import { PageHeader } from "../../components/PageHeader";
 import { Segmented } from "../../components/Segmented";
 import { CategoryTag, EmploymentTag } from "../../components/PersonBadge";
-import { CATEGORIES, DAY_STATE_LABEL, PROJECT_COLORS } from "../../domain/labels";
+import { categories, DAY_STATE_LABEL, PROJECT_COLORS } from "../../domain/labels";
 import type { DayEntry, DayState, Employee } from "../../domain/types";
 import { todayISO } from "../../lib/dates";
 
@@ -16,6 +16,11 @@ const BRAND = [
   { name: "Golden Hour", hex: "#F4B13B", role: "Tylko stan: do zatwierdzenia" },
   { name: "Terracotta Clay", hex: "#E0745E", role: "Tylko stan: nieobecny; tekst alarmów (braki, termin)" },
   { name: "Warm Sand", hex: "#F2E6D6", role: "Weekendy, zaznaczenia, plakietki ról" },
+];
+
+const TRADES = [
+  { name: "Elektrycy", hex: "#D2373C", role: "Branża: znacznik E, słupki i wykresy obsady", dark: true },
+  { name: "Mechanicy", hex: "#2B67D1", role: "Branża: znacznik M, słupki i wykresy obsady", dark: true },
 ];
 
 const WORKING = [
@@ -63,7 +68,7 @@ export function BrandbookView() {
         <h2 className="section-title">Cztery zasady</h2>
         <ol className="bb-principles">
           <li>
-            <strong>Kolor to stan.</strong> Zielony, żółty i czerwony opisują tylko stan dnia pracy.
+            <strong>Kolor to stan.</strong> Zielony, żółty i terakota opisują tylko stan dnia pracy. Czerwień i błękit to branże: elektrycy i mechanicy.
           </li>
           <li>
             <strong>Dzień to kropka.</strong> Ten sam zaokrąglony kwadrat na mapie, osi czasu i w kalendarzu.
@@ -81,6 +86,15 @@ export function BrandbookView() {
         <h2 className="section-title">Paleta marki</h2>
         <div className="bb-swatches">
           {BRAND.map((c) => (
+            <div key={c.hex} className={`bb-swatch ${c.dark ? "is-dark" : ""}`} style={{ background: c.hex }}>
+              <strong>{c.name}</strong>
+              <span>{c.hex}</span>
+              <p>{c.role}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bb-swatches bb-swatches--trades">
+          {TRADES.map((c) => (
             <div key={c.hex} className={`bb-swatch ${c.dark ? "is-dark" : ""}`} style={{ background: c.hex }}>
               <strong>{c.name}</strong>
               <span>{c.hex}</span>
@@ -191,7 +205,7 @@ export function BrandbookView() {
             <span className="badge badge--status badge--active">W realizacji</span>
           </div>
           <div className="bb-row">
-            {CATEGORIES.map((c) => (
+            {categories().map((c) => (
               <CategoryTag key={c} category={c} />
             ))}
             {(["UOP", "B2B", "AGENCY"] as const).map((e) => (

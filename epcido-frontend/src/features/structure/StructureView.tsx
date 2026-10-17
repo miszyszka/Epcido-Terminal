@@ -3,7 +3,7 @@ import { useUi } from "../../app/UiContext";
 import { PageHeader } from "../../components/PageHeader";
 import { PositionMark, ProjectDot } from "../../components/PersonBadge";
 import type { Employee } from "../../domain/types";
-import { canEditProject, visibleProjects as allowedProjects } from "../../domain/permissions";
+import { can, canEditProject, visibleProjects as allowedProjects } from "../../domain/permissions";
 import { todayISO } from "../../lib/dates";
 import { people as peopleCount, projectsCount } from "../../lib/text";
 
@@ -22,7 +22,7 @@ export function StructureView() {
       (e.position === "TEAM_LEADER" || e.position === "ELECTRICIAN" || e.position === "MECHANIC") &&
       !model.activeAssignment(e.id, today)
   );
-  const showBench = user.role === "ADMIN" || user.role === "PLANNING";
+  const showBench = can(user, "staffing.plan") || can(user, "team.plan");
   const open = (id: string) => {
     const p = model.projectById.get(id);
     if (p && canEditProject(user, p)) openProject(id);

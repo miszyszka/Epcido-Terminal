@@ -21,6 +21,10 @@ import { ProjectEditor } from "./features/project/ProjectEditor";
 import { StructureView } from "./features/structure/StructureView";
 import { TimelineView } from "./features/timeline/TimelineView";
 import { MyHoursView } from "./features/worker/MyHoursView";
+import { LeavesView } from "./features/leaves/LeavesView";
+import { ReportsView } from "./features/admin/ReportsView";
+import { SettingsView } from "./features/admin/SettingsView";
+import { UsersView } from "./features/admin/UsersView";
 
 export default function App() {
   return (
@@ -117,6 +121,10 @@ function Guarded() {
       <Route path="/struktura" element={<StructureView />} />
       <Route path="/ludzie" element={<PeopleView />} />
       <Route path="/obsada" element={<StaffingView />} />
+      <Route path="/urlopy" element={<LeavesView />} />
+      <Route path="/raporty" element={<ReportsView />} />
+      <Route path="/uzytkownicy" element={<UsersView />} />
+      <Route path="/ustawienia" element={<SettingsView />} />
       <Route path="*" element={<Navigate to={homeFor(user)} replace />} />
     </Routes>
   );

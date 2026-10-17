@@ -7,9 +7,12 @@ import { useUi } from "../../app/UiContext";
 import { DayCell } from "../../components/DayCell";
 import { PageHeader } from "../../components/PageHeader";
 import { EmploymentTag, PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { EMPTY_PEOPLE_FILTER, PeopleFilters, passesPeopleFilter, type PeopleFilterValue } from "../../components/PeopleFilters";
 import { Segmented } from "../../components/Segmented";
 import { SelectMenu } from "../../components/SelectMenu";
-import { CATEGORIES, formatMonths, POSITION_LABEL, TRADE_LABEL } from "../../domain/labels";
+import { categories, formatMonths, isEpcido, POSITION_LABEL, TRADE_LABEL } from "../../domain/labels";
+import { leavesBetween } from "../../domain/staffing";
+import { leaveDates } from "../leaves/LeaveParts";
 import { cellView, sheetsFor } from "../../domain/timesheets";
 import { approvalNote, describeHours } from "../../domain/workflow";
 import { can, canEditProject, visibleProjects } from "../../domain/permissions";
@@ -32,13 +35,14 @@ export function PeopleView() {
   const person = personId ? model.employeeById.get(personId) : null;
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [pf, setPf] = useState<PeopleFilterValue>(EMPTY_PEOPLE_FILTER);
   const today = todayISO();
   const week = eachDay(startOfWeek(today), addDays(startOfWeek(today), 6));
   const canPlan = can(user, "team.plan");
   const targets = visibleProjects(model, user).filter((p) => p.status !== "CLOSED");
 
   const staff = useMemo(
-    () => model.employees.filter((e) => !["PLANNER", "ADMIN", "PROJECT_MANAGER"].includes(e.position)),
+    () => model.employees.filter((e) => !["PLANNER", "ADMIN", "PROJECT_MANAGER", "HR", "OFFICE"].includes(e.position) && e.active !== false),
     [model]
   );
 
@@ -47,10 +51,15 @@ export function PeopleView() {
     if (f === "bench") return FIELD_POSITIONS.includes(e.position) && !model.activeAssignment(e.id, today);
     return e.position === f;
   }
-  const count = (f: Filter) => staff.filter((e) => passes(e, f)).length;
+  // Suwaki stażu i EPCIDO / agencja dotyczą ludzi w projektach (TL, elektrycy, mechanicy)
+  const filtersOn = pf.employment !== "all" || pf.minTotal > 0 || pf.minCategory > 0;
+  const passesPf = (e: Employee) => !filtersOn || (FIELD_POSITIONS.includes(e.position) && passesPeopleFilter(e, pf));
+  const count = (f: Filter) => staff.filter((e) => passes(e, f) && passesPf(e)).length;
   const rows = person
     ? [person]
-    : staff.filter((e) => passes(e, filter) && matches(search, e.name, ...model.projectsOf(e.id).map((p) => p.name)));
+    : staff.filter((e) => passes(e, filter) && passesPf(e) && matches(search, e.name, ...model.projectsOf(e.id).map((p) => p.name)));
+  const pfBase = staff.filter((e) => FIELD_POSITIONS.includes(e.position) && passes(e, filter) && passesPeopleFilter(e, { ...pf, employment: "all" }));
+  const pfCounts = { all: pfBase.length, epcido: pfBase.filter((e) => isEpcido(e)).length, agency: pfBase.filter((e) => !isEpcido(e)).length };
 
   return (
     <div className="page">
@@ -88,6 +97,7 @@ export function PeopleView() {
         ]}
       />
       )}
+      {!person && <PeopleFilters value={pf} onChange={setPf} categories={categories()} counts={pfCounts} />}
       {!person && (
         <label className="inline-search">
           <Search size={16} aria-hidden />
@@ -118,6 +128,7 @@ export function PeopleView() {
               const main = projects[0];
               const next = (model.assignmentsByEmployee.get(e.id) ?? []).find((a) => a.from > today);
               const nextProject = next ? model.projectById.get(next.projectId) : null;
+              const upcoming = leavesBetween(model, e.id, today, addDays(today, 42))[0];
               return (
                 <tr key={e.id}>
                   <th scope="row">
@@ -135,11 +146,12 @@ export function PeopleView() {
                     {e.experience ? (
                       <span
                         className="exp-cell"
-                        data-tip={CATEGORIES.map((c) => `${c}: ${formatMonths(e.experience!.byCategory[c])}`).join("\n")}
+                        data-tip={categories().map((c) => `${c}: ${formatMonths(e.experience!.byCategory[c] ?? 0)}`).join("\n")}
                       >
                         <strong>{formatMonths(e.experience.totalMonths)}</strong>
                         <span>
-                          {CATEGORIES.filter((c) => e.experience!.byCategory[c] > 0)
+                          {categories()
+                            .filter((c) => (e.experience!.byCategory[c] ?? 0) > 0)
                             .sort((a, b) => e.experience!.byCategory[b] - e.experience!.byCategory[a])
                             .slice(0, 2)
                             .map((c) => `${c} ${formatMonths(e.experience!.byCategory[c])}`)
@@ -170,6 +182,12 @@ export function PeopleView() {
                     )}
                   </td>
                   <td className="muted">
+                    {upcoming && (
+                      <span className={`people-leave people-leave--${upcoming.status === "PENDING" ? "pending" : "ok"}`} data-tip={upcoming.status === "PENDING" ? "Wniosek czeka na akceptację" : `Zaakceptował ${upcoming.decidedByName ?? "—"}`}>
+                        {upcoming.type === "SICK" ? "L4" : "Urlop"} {leaveDates(upcoming).replace(/ \d{4}$/, "")}
+                        {upcoming.status === "PENDING" ? " (wniosek)" : ""}
+                      </span>
+                    )}
                     {nextProject ? (
                       <span className="project-tag">
                         <ProjectDot color={nextProject.color} />

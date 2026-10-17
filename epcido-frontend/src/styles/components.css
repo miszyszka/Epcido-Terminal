@@ -418,6 +418,29 @@
   box-shadow: none;
   color: var(--ink);
 }
+/* Branże: E czerwień, M błękit (tokens.css) */
+.pos--electrician {
+  background: var(--el-soft);
+  box-shadow: inset 0 0 0 1px var(--el-line);
+  color: var(--el-ink);
+}
+.pos--mechanic {
+  background: var(--me-soft);
+  box-shadow: inset 0 0 0 1px var(--me-line);
+  color: var(--me-ink);
+}
+.pos--t-el {
+  box-shadow: inset 0 -2px 0 var(--el);
+}
+.pos--t-me {
+  box-shadow: inset 0 -2px 0 var(--me);
+}
+.pos--hr,
+.pos--office {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-2);
+}
 
 .chip {
   display: inline-flex;
@@ -898,26 +921,32 @@ input[list]::-webkit-calendar-picker-indicator {
 .dock__link--tool:hover {
   background: #eadbc6;
 }
-.dock__icon {
-  position: relative;
-  display: grid;
-  place-items: center;
+/* Narzędzia administratora: same ikony, nazwa w dymku (aktywna — z nazwą) */
+.dock__link--admin {
+  padding: 0 10px;
 }
-.dock__badge {
-  position: absolute;
-  top: -9px;
-  left: 11px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+.dock__link--admin:not(.is-active) .dock__label {
+  display: none;
+}
+/* Licznik: pigułka w jednej linii z nazwą, wyśrodkowana w pionie */
+.dock__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: -2px;
+  padding: 0 6px;
   border-radius: var(--r-pill);
   background: var(--golden);
   color: var(--ink);
-  font-size: 10.5px;
-  line-height: 18px;
-  font-weight: var(--w-heavy);
-  text-align: center;
-  box-shadow: 0 0 0 2px var(--surface);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: var(--w-bold);
+  font-variant-numeric: tabular-nums;
+}
+.dock__link.is-active .dock__count {
+  background: var(--golden);
+  color: var(--ink);
 }
 
 /* Okno dialogowe */
@@ -945,6 +974,9 @@ input[list]::-webkit-calendar-picker-indicator {
   background: var(--surface);
   box-shadow: var(--shadow-float);
   animation: pop var(--dur) var(--ease);
+}
+.dialog--lg {
+  width: min(900px, 100%);
 }
 .dialog__head {
   display: flex;
@@ -1087,6 +1119,13 @@ input[list]::-webkit-calendar-picker-indicator {
   }
   .dock__link:not(.is-active) .dock__label {
     display: none;
+  }
+  .dock__count {
+    min-width: 18px;
+    height: 18px;
+    margin-left: -4px;
+    padding: 0 5px;
+    font-size: 10.5px;
   }
   .dock__divider {
     margin: 0 3px;

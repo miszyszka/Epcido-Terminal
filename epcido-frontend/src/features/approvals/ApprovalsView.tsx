@@ -9,6 +9,7 @@ import { DeadlineBanner } from "../../components/DeadlineBanner";
 import { PageHeader } from "../../components/PageHeader";
 import { PositionMark, ProjectDot } from "../../components/PersonBadge";
 import { cellView, expectedDays, problemSummary, sheetsFor, WITHHELD_MESSAGE, type SheetInfo } from "../../domain/timesheets";
+import { can } from "../../domain/permissions";
 import {
   approvalNote,
   deadlineSummary,
@@ -31,7 +32,7 @@ export function ApprovalsView() {
   const queue = useQueue();
   const [params, setParams] = useSearchParams();
   const svFilter = params.get("sv");
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = can(user, "hours.fixWithheld");
 
   const items = useMemo(
     () => queue.items.filter((it) => !it.locked && (!svFilter || model.projectById.get(it.projectId)?.supervisorId === svFilter)),

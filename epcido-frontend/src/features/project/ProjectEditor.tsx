@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useData, useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { ProjectDot } from "../../components/PersonBadge";
@@ -13,16 +13,17 @@ import { AssignDialog } from "./AssignDialog";
 import { HistoryPanel } from "./HistoryPanel";
 import { emptyProjectInput, ProjectForm, projectToInput } from "./ProjectForm";
 import { TeamTimeline } from "./TeamTimeline";
+import { AutoStaffDialog } from "../staffing/AutoStaffDialog";
 
 /** Edytor projektu na pełnym ekranie: dane projektu po lewej, plan zespołu na osi czasu po prawej. */
 export function ProjectEditor() {
   const { editor } = useUi();
   if (!editor) return null;
   // key: nowy egzemplarz edytora dla każdego projektu (czysty stan formularza)
-  return <EditorInner key={`${editor.projectId ?? "new"}-${editor.rev}`} projectId={editor.projectId} initialTab={editor.tab} />;
+  return <EditorInner key={`${editor.projectId ?? "new"}-${editor.rev}`} projectId={editor.projectId} initialTab={editor.tab} focus={Boolean(editor.focus)} />;
 }
 
-function EditorInner({ projectId, initialTab }: { projectId: string | null; initialTab: "team" | "history" }) {
+function EditorInner({ projectId, initialTab, focus }: { projectId: string | null; initialTab: "team" | "history"; focus: boolean }) {
   const model = useModel();
   const user = useUser();
   const data = useData();
@@ -30,7 +31,7 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
   const project = projectId ? model.projectById.get(projectId) : undefined;
 
   const [values, setValues] = useState<ProjectInput>(() =>
-    project ? projectToInput(project) : emptyProjectInput(model.projects, user.role === "PROJECT_MANAGER" ? user.id : null)
+    project ? projectToInput(project) : emptyProjectInput(model.projects, user.position === "PROJECT_MANAGER" ? user.id : null)
   );
   const [draft, setDraft] = useState<DraftAssignment[]>(() =>
     (projectId ? model.assignmentsByProject.get(projectId) ?? [] : []).map((a) => ({
@@ -45,6 +46,8 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
   const [tab, setTab] = useState<"team" | "history">(initialTab);
   const [attempted, setAttempted] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [proposing, setProposing] = useState(false);
+  const [formOpen, setFormOpen] = useState(!focus || !projectId);
   const [saving, setSaving] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -89,7 +92,7 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
     const id = await data.saveProject(projectId, values, draft);
     setSaving(false);
     // Otwórz ponownie z zapisanych danych — plan dostaje prawdziwe identyfikatory przypisań
-    if (id) openProject(id, tab);
+    if (id) openProject(id, tab, !formOpen);
   }
 
   if (projectId && !project) {
@@ -136,9 +139,22 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
         </div>
       </header>
 
-      <div className="editor__body">
-        <aside className="editor__form" aria-label="Dane projektu">
-          <h3 className="editor__heading">Dane projektu</h3>
+      <div className={`editor__body ${formOpen ? "" : "is-collapsed"}`}>
+        {!formOpen && (
+          <button type="button" className="editor__expand" onClick={() => setFormOpen(true)} data-tip="Pokaż dane projektu">
+            <PanelLeftOpen size={18} aria-hidden />
+            <span>Dane projektu</span>
+          </button>
+        )}
+        <aside className="editor__form" aria-label="Dane projektu" hidden={!formOpen}>
+          <div className="editor__heading-row">
+            <h3 className="editor__heading">Dane projektu</h3>
+            {project && (
+              <button type="button" className="icon-btn icon-btn--sm" onClick={() => setFormOpen(false)} aria-label="Zwiń dane projektu" data-tip="Zwiń — plan na całą szerokość">
+                <PanelLeftClose size={18} />
+              </button>
+            )}
+          </div>
           {!editable && <p className="notice">Dane projektu zmienia Planning lub Project Manager tego projektu.</p>}
           <ProjectForm values={values} onChange={set} errors={errors} projectId={projectId} readOnly={!editable} />
         </aside>
@@ -165,6 +181,8 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
               onChange={setDraft}
               editable={canPlan}
               onAssign={() => setAssigning(true)}
+              demand={values.demand}
+              onPropose={can(user, "staffing.plan") && project ? () => setProposing(true) : undefined}
             />
           ) : (
             project && <HistoryPanel projectId={project.id} />
@@ -172,6 +190,16 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
         </main>
       </div>
 
+      {proposing && project && (
+        <AutoStaffDialog
+          project={{ ...project, ...values }}
+          team={draft.map((d) => ({ employeeId: d.employeeId, from: d.from, to: d.to }))}
+          onClose={() => setProposing(false)}
+          onApply={(items) =>
+            setDraft((d) => [...d, ...items.map((it) => ({ key: newId("draft"), employeeId: it.employeeId, from: it.from, to: it.to, task: it.task }))])
+          }
+        />
+      )}
       {assigning && (
         <AssignDialog
           projectId={projectId}

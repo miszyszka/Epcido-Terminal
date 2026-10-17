@@ -1,23 +1,24 @@
 import { useMemo, useState } from "react";
-import { CalendarOff, Check, ChevronLeft, ChevronRight, History, Lock, Send, TriangleAlert } from "lucide-react";
+import { CalendarOff, Check, ChevronLeft, ChevronRight, History, Lock, Send, TriangleAlert, X } from "lucide-react";
 import { useData, useModel, useUser } from "../../app/DataContext";
 import { useNow } from "../../app/hooks";
-import { DatePicker } from "../../components/DatePicker";
 import { DayCell } from "../../components/DayCell";
-import { Dialog } from "../../components/Dialog";
-import { Field } from "../../components/Field";
 import { ProjectDot } from "../../components/PersonBadge";
 import { BreakChoice, TimeStepper } from "../../components/TimeStepper";
 import { ABSENCE_LABEL, formatDuration, workedMinutes } from "../../domain/labels";
 import { cellView, sheetsFor, WITHHELD_MESSAGE, type CellView } from "../../domain/timesheets";
-import { approvalNote, approveByDay, editRight, statusText } from "../../domain/workflow";
-import type { AbsenceType, DayEntry, DayState, Project } from "../../domain/types";
+import { approvalNote, approveByDay, approveTime, editRight, leaveNote, statusText } from "../../domain/workflow";
+import { seesDispatch } from "../../domain/permissions";
+import type { DayEntry, DayState, LeaveRequest, Project } from "../../domain/types";
 import { addDays, eachDay, formatDay, formatMinutes, formatTimestamp, isoWeek, startOfWeek, todayISO, weekdayIndex, type ISODate } from "../../lib/dates";
+import { LeaveDialog, workdays } from "../leaves/LeaveDialog";
+import { leaveDates, LeaveKind, LeaveStatusBadge } from "../leaves/LeaveParts";
 import { cityOf } from "../../lib/search";
 
 /**
- * Ekran pracownika (i Team Leadera): wpis dnia w kilku dotknięciach, tydzień w kolorach, nieobecność.
+ * Ekran pracownika (i Team Leadera): wpis dnia w kilku dotknięciach, tydzień w kolorach, wnioski o nieobecność.
  * Dzień można poprawiać, dopóki nikt go nie zatwierdził. W przerwie (brak zadania) nie ma wpisu godzin.
+ * Pracownik i TL nie widzą wysyłki do Dataverse ani wstrzymanych timesheetów — to zadanie osób zatwierdzających.
  */
 export function MyHoursView() {
   const model = useModel();
@@ -40,13 +41,15 @@ export function MyHoursView() {
   const project = record ? model.projectById.get(record.projectId) ?? null : projectFor(date);
   const weekMinutes = days.reduce((s, d) => s + workedMinutes(mine.get(d)?.entry), 0);
   const sheets = sheetsFor(model, now);
+  const dispatch = seesDispatch(user);
   const viewOf = (d: ISODate): CellView => {
     const pid = mine.get(d)?.projectId ?? projectFor(d)?.id;
-    return pid ? cellView(sheets, pid, user.id, d, mine.get(d)?.entry) : { state: "off", sent: false, closed: false, missing: false };
+    return pid ? cellView(sheets, pid, user.id, d, mine.get(d)?.entry, !dispatch) : { state: "off", sent: false, closed: false, missing: false };
   };
-  // Wstrzymane timesheety z ostatnich tygodni, w których ta osoba pracowała
+  // Wstrzymane timesheety z ostatnich tygodni — tylko dla osób, które zatwierdzają (np. supervisor na swoim ekranie)
   const withheld = useMemo(() => {
     const out: { week: ISODate; project: Project }[] = [];
+    if (!dispatch) return out;
     for (let i = 1; i <= 4; i++) {
       const w = addDays(startOfWeek(today), -7 * i);
       const ids = new Set(eachDay(w, addDays(w, 6)).map((d) => mine.get(d)?.projectId ?? projectFor(d)?.id).filter((x): x is string => Boolean(x)));
@@ -54,7 +57,11 @@ export function MyHoursView() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, sheets, today, user.id]);
+  }, [model, sheets, today, user.id, dispatch]);
+  const myLeaves = model
+    .leavesOf(user.id)
+    .filter((l) => l.status === "PENDING" || (l.status === "APPROVED" && l.to >= addDays(today, -14)) || (l.status === "REJECTED" && (l.decidedAt ?? "") >= addDays(today, -30)))
+    .sort((a, b) => b.from.localeCompare(a.from));
 
   return (
     <div className="page worker">
@@ -93,11 +100,13 @@ export function MyHoursView() {
         today={today}
         entry={entry}
         project={project}
+        dispatch={dispatch}
+        leave={model.leaveOn(user.id, date)}
       />
 
       <button type="button" className="btn btn--secondary btn--block worker__absence" onClick={() => setAbsence(true)}>
         <CalendarOff size={18} aria-hidden />
-        Zgłoś nieobecność
+        Zgłoś urlop albo L4
       </button>
 
       <section className="worker__week" aria-label="Tydzień">
@@ -139,12 +148,22 @@ export function MyHoursView() {
                     sent={v.sent}
                     closed={v.closed}
                     today={d === today}
-                    label={statusText(model, mine.get(d)?.projectId ?? projectFor(d)?.id ?? null, user.id, d, e, now)}
+                    label={statusText(model, mine.get(d)?.projectId ?? projectFor(d)?.id ?? null, user.id, d, e, now, user)}
                   />
                   <span className="wday__date">{formatDay(d)}</span>
                   <span className="wday__hours">{describe(e)}</span>
-                  <span className={`wday__status ${v.state === "missed" ? "is-missed" : ""}`}>
-                    {v.missing ? "brak wpisu — nie wysłany" : e ? short(v.state, v.sent, v.closed) : future ? "" : onBreak ? "przerwa" : "brak wpisu"}
+                  <span className={`wday__status ${v.state === "missed" ? "is-missed" : ""} ${pendingLeave(d) ? "is-pending-leave" : ""}`}>
+                    {v.missing
+                      ? "brak wpisu — nie wysłany"
+                      : e
+                        ? short(v.state, v.sent, v.closed, e)
+                        : pendingLeave(d)
+                          ? "urlop — czeka"
+                          : future
+                            ? ""
+                            : onBreak
+                              ? "przerwa"
+                              : "brak wpisu"}
                   </span>
                 </button>
               </li>
@@ -153,12 +172,64 @@ export function MyHoursView() {
         </ul>
       </section>
 
-      {absence && <AbsenceDialog onClose={() => setAbsence(false)} />}
+      <MyLeaves leaves={myLeaves} />
+
+      {absence && <LeaveDialog onClose={() => setAbsence(false)} />}
     </div>
+  );
+
+  function pendingLeave(d: ISODate) {
+    return model.leaveOn(user.id, d)?.status === "PENDING" && weekdayIndex(d) < 5;
+  }
+}
+
+/** Moje wnioski: czekające, zaakceptowane (kto i kiedy), odrzucone (z powodem). Czekający można anulować. */
+function MyLeaves({ leaves }: { leaves: LeaveRequest[] }) {
+  const data = useData();
+  if (leaves.length === 0) return null;
+  return (
+    <section className="worker__leaves" aria-label="Moje wnioski">
+      <h2>Moje wnioski</h2>
+      <ul>
+        {leaves.map((l) => (
+          <li key={l.id} className="my-leave">
+            <LeaveKind leave={l} />
+            <div className="my-leave__main">
+              <strong>{leaveDates(l)}</strong>
+              <span>
+                {workdays(l.from, l.to)} dni rob.
+                {l.decidedAt && l.status !== "PENDING" ? ` · ${formatTimestamp(l.decidedAt)}` : ` · wniosek z ${formatTimestamp(l.createdAt)}`}
+              </span>
+              {l.status === "REJECTED" && l.decisionNote && <em>„{l.decisionNote}”</em>}
+            </div>
+            <LeaveStatusBadge leave={l} />
+            {l.status === "PENDING" && (
+              <button type="button" className="icon-btn icon-btn--sm" aria-label="Anuluj wniosek" data-tip="Anuluj wniosek" onClick={() => data.cancelLeave({ leaveId: l.id })}>
+                <X size={16} />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
-function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISODate; entry: DayEntry | undefined; project: Project | null }) {
+function DayEditor({
+  date,
+  today,
+  entry,
+  project,
+  dispatch,
+  leave,
+}: {
+  date: ISODate;
+  today: ISODate;
+  entry: DayEntry | undefined;
+  project: Project | null;
+  dispatch: boolean;
+  leave: LeaveRequest | undefined;
+}) {
   const data = useData();
   const model = useModel();
   const user = useUser();
@@ -168,12 +239,21 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
   const [breakMin, setBreakMin] = useState(entry?.breakMin ?? 30);
   const [saving, setSaving] = useState(false);
   const right = project ? editRight(model, user, project.id, user.id, date, entry, now) : null;
-  const editable = Boolean(right?.can) && entry?.kind !== "ABSENCE";
+  const editable = Boolean(right?.can) && entry?.kind !== "ABSENCE" && leave?.status !== "PENDING";
   const worked = Math.max(0, end - start - breakMin);
   const unchanged = entry?.kind === "WORK" && entry.start === start && entry.end === end && (entry.breakMin ?? 0) === breakMin;
-  const v: CellView = project ? cellView(sheetsFor(model, now), project.id, user.id, date, entry) : { state: "off", sent: false, closed: false, missing: false };
-  const changes = (entry?.history ?? []).filter((h) => h.byId !== user.id);
-  const lockText = entry && !editable ? right?.reason ?? approvalNote(model, project!.id, user.id, date, entry, now).split("\n")[0] : null;
+  const v: CellView = project
+    ? cellView(sheetsFor(model, now), project.id, user.id, date, entry, !dispatch)
+    : { state: "off", sent: false, closed: false, missing: false };
+  const changes = (entry?.history ?? []).filter((h) => h.byId !== user.id && !entry?.leaveId);
+  const lockText =
+    entry && !editable
+      ? entry.leaveId && leave
+        ? leaveNote(leave)
+        : right?.reason ?? approvalNote(model, project!.id, user.id, date, entry, now).split("\n")[0]
+      : !entry && leave?.status === "PENDING"
+        ? leaveNote(leave)
+        : null;
 
   return (
     <section className={`worker__day ${entry ? `is-${v.state}` : ""}`} aria-label="Wybrany dzień">
@@ -182,7 +262,8 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
           {formatDay(date)}
           {date === today && <span>, dziś</span>}
         </h2>
-        {(entry || v.missing) && <span className={`badge ${badgeClass(v.state)}`}>{statusText(model, project?.id ?? null, user.id, date, entry, now)}</span>}
+        {(entry || v.missing) && <span className={`badge ${badgeClass(v.state)}`}>{statusText(model, project?.id ?? null, user.id, date, entry, now, user)}</span>}
+        {!entry && leave?.status === "PENDING" && <span className="badge badge--pending">Urlop — czeka na akceptację</span>}
       </header>
 
       {entry?.kind === "ABSENCE" ? (
@@ -214,7 +295,7 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
             {!entry ? "Wyślij do zatwierdzenia" : unchanged ? "Wysłane do supervisora" : "Wyślij poprawione godziny"}
           </button>
           <p className="worker__hint">
-            Możesz poprawiać, dopóki supervisor nie zatwierdzi — najpóźniej do {formatDay(approveByDay(startOfWeek(date)))}, 23:59.
+            Możesz poprawiać, dopóki supervisor nie zatwierdzi — najpóźniej do {formatDay(approveByDay(startOfWeek(date)))}, {approveTime()}.
           </p>
         </>
       ) : entry ? (
@@ -234,7 +315,7 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
           <span>{lockText}</span>
         </p>
       )}
-      {!entry && !editable && (
+      {!entry && !editable && leave?.status !== "PENDING" && (
         <p className="worker__hint">
           <Lock size={14} aria-hidden />
           <span>{project ? right?.reason ?? "Tego dnia nie można już wpisać." : "Przerwa — bez zadania w projekcie."}</span>
@@ -262,75 +343,14 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
   );
 }
 
-function AbsenceDialog({ onClose }: { onClose: () => void }) {
-  const data = useData();
-  const user = useUser();
-  const today = todayISO();
-  const [type, setType] = useState<AbsenceType>("LEAVE");
-  const [from, setFrom] = useState<ISODate>(today);
-  const [to, setTo] = useState<ISODate>(today);
-  const [note, setNote] = useState("");
-  const types = useMemo(() => Object.keys(ABSENCE_LABEL) as AbsenceType[], []);
-  return (
-    <Dialog
-      title="Zgłoś nieobecność"
-      description="Supervisor zatwierdzi ją razem z godzinami. Weekendy i dni bez zadania są pomijane."
-      onClose={onClose}
-      footer={
-        <>
-          <button type="button" className="btn btn--quiet" onClick={onClose}>
-            Anuluj
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={async () => {
-              if (await data.reportAbsence({ employeeId: user.id, from, to, type, note: note.trim() || undefined })) onClose();
-            }}
-          >
-            Zgłoś nieobecność
-          </button>
-        </>
-      }
-    >
-      <div className="reasons" role="radiogroup" aria-label="Rodzaj">
-        {types.map((t) => (
-          <button key={t} type="button" role="radio" aria-checked={type === t} className={`chip chip--choice ${type === t ? "is-selected" : ""}`} onClick={() => setType(t)}>
-            {ABSENCE_LABEL[t]}
-          </button>
-        ))}
-      </div>
-      <div className="form-grid">
-        <Field label="Od" htmlFor="ab-from">
-          <DatePicker
-            id="ab-from"
-            value={from}
-            onChange={(v) => {
-              if (!v) return;
-              setFrom(v);
-              if (v > to) setTo(v);
-            }}
-          />
-        </Field>
-        <Field label="Do" htmlFor="ab-to">
-          <DatePicker id="ab-to" value={to} onChange={(v) => v && setTo(v)} min={from} rangeStart={from} />
-        </Field>
-      </div>
-      <label className="field">
-        <span className="field__label">Uwagi (opcjonalnie)</span>
-        <textarea className="control control--area" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-      </label>
-    </Dialog>
-  );
-}
-
 function describe(e: DayEntry | undefined) {
   if (!e) return "";
   if (e.kind === "ABSENCE") return ABSENCE_LABEL[e.absence ?? "OTHER"];
   return `${formatMinutes(e.start ?? 0)}–${formatMinutes(e.end ?? 0)}`;
 }
 
-function short(state: DayState, sent: boolean, closed: boolean) {
+function short(state: DayState, sent: boolean, closed: boolean, e: DayEntry) {
+  if (e.kind === "ABSENCE" && e.leaveId) return e.absence === "SICK" ? "L4" : "urlop";
   if (sent) return "wysłane";
   if (closed && state !== "missed") return "zamknięte";
   if (state === "missed") return "nie wysłane";

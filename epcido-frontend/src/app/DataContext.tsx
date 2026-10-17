@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AbsenceType, Assignment, DayEntry, Employee, Project, ProjectInput } from "../domain/types";
+import type { AbsenceType, Assignment, DayEntry, Employee, LeaveRequest, Project, ProjectInput, SystemSettings } from "../domain/types";
+import { applySettings, normalizeSettings } from "../domain/settings";
 import type { QueueItem } from "../domain/workflow";
 import type { EntryInput } from "../data/commands";
 import type { QueueLevel } from "../domain/workflow";
@@ -40,6 +41,7 @@ export interface Row {
 
 export interface Model {
   snapshot: Snapshot;
+  settings: SystemSettings;
   employees: Employee[];
   projects: Project[];
   assignments: Assignment[];
@@ -58,6 +60,12 @@ export interface Model {
   rows: (projectId: string, from: ISODate, to: ISODate) => Row[];
   /** Projekty osoby na dziś (zespół, nadzór lub zarządzanie) */
   projectsOf: (employeeId: string, date?: ISODate) => Project[];
+  leaves: LeaveRequest[];
+  leaveById: Map<string, LeaveRequest>;
+  /** Wnioski osoby (bez anulowanych i odrzuconych — patrz `leaves` dla pełnej historii), od najwcześniejszego */
+  leavesOf: (employeeId: string) => LeaveRequest[];
+  /** Aktywny wniosek (zaakceptowany albo czekający) obejmujący dzień */
+  leaveOn: (employeeId: string, date: ISODate) => LeaveRequest | undefined;
 }
 
 interface DataValue {
@@ -69,7 +77,15 @@ interface DataValue {
   saveProject: (id: string | null, input: ProjectInput, team: DraftAssignment[]) => Promise<string | null>;
   assignToProject: (employeeId: string, projectId: string) => Promise<boolean>;
   submitHours: (args: { projectId: string; employeeId: string; date: ISODate; start: number; end: number; breakMin: number }) => Promise<boolean>;
-  reportAbsence: (args: { employeeId: string; from: ISODate; to: ISODate; type: AbsenceType; note?: string }) => Promise<boolean>;
+  requestLeave: (args: { employeeId: string; from: ISODate; to: ISODate; type: AbsenceType; note?: string }) => Promise<boolean>;
+  decideLeave: (args: { leaveId: string; approve: boolean; note?: string }) => Promise<boolean>;
+  cancelLeave: (args: { leaveId: string; note?: string }) => Promise<boolean>;
+  confirmSickNote: (leaveId: string) => Promise<boolean>;
+  saveUser: (args: commands.UserInput & { id: string | null }) => Promise<string | null>;
+  saveSettings: (settings: SystemSettings) => Promise<boolean>;
+  logReport: (summary: string) => Promise<boolean>;
+  /** Kilka zadań naraz (propozycja obsady) — z cofnięciem w komunikacie */
+  planMany: (items: { employeeId: string; projectId: string; from: ISODate; to: ISODate | null; task: string; breakDays?: number }[]) => Promise<boolean>;
   approve: (items: QueueItem[]) => Promise<boolean>;
   editEntry: (args: {
     projectId: string;
@@ -205,7 +221,32 @@ export function DataProvider({ children }: { children: ReactNode }) {
       assignToProject: (employeeId, projectId) =>
         commit((s, a) => commands.assignToProject(s, a, employeeId, projectId, todayISO()), "Przypisano do projektu"),
       submitHours: (args) => commit((s, a) => commands.submitHours(s, a, args), "Godziny wysłane do zatwierdzenia"),
-      reportAbsence: (args) => commit((s, a) => commands.reportAbsence(s, a, args), "Nieobecność zgłoszona"),
+      requestLeave: (args) =>
+        commit((s, a) => commands.requestLeave(s, a, args), args.type === "SICK" ? "L4 zgłoszone — obowiązuje od razu" : "Wniosek wysłany do akceptacji"),
+      decideLeave: (args) => commit((s, a) => commands.decideLeave(s, a, args), args.approve ? "Wniosek zaakceptowany" : "Wniosek odrzucony"),
+      cancelLeave: (args) => commit((s, a) => commands.cancelLeave(s, a, args), "Wniosek anulowany"),
+      confirmSickNote: (leaveId) => commit((s, a) => commands.confirmSickNote(s, a, { leaveId }), "L4 potwierdzone"),
+      async saveUser(args) {
+        let savedId: string | null = null;
+        const ok = await commit((s, a) => {
+          const r = commands.saveUser(s, a, args);
+          savedId = r.id;
+          return r.changes;
+        }, args.id ? "Zmiany zapisane" : "Użytkownik dodany");
+        return ok ? savedId : null;
+      },
+      saveSettings: (settings) => commit((s, a) => commands.saveSettings(s, a, settings), "Ustawienia zapisane"),
+      logReport: (summary) => commit((_s, a) => commands.logReport(a, summary)),
+      async planMany(items) {
+        const ids = items.map(() => newId("a"));
+        const ok = await commit((s, a) => commands.planMany(s, a, items.map((it, i) => ({ ...it, id: ids[i] }))));
+        if (ok)
+          toast(`Dodano do planu: ${items.length} ${items.length === 1 ? "osobę" : items.length < 5 ? "osoby" : "osób"}`, "info", {
+            label: "Cofnij",
+            run: () => void commit((s, a) => commands.removeMany(s, a, { assignmentIds: ids, reason: "Cofnięto propozycję obsady" }), "Cofnięto"),
+          });
+        return ok;
+      },
       approve: (items) => commit((s, a) => commands.approve(s, a, items), "Zatwierdzono"),
       editEntry: (args) =>
         commit((s, a) => commands.editEntry(s, a, args), args.approveLevel ? "Zapisano i zatwierdzono" : "Zmiana zapisana w notatce dnia"),
@@ -266,6 +307,8 @@ const byName = (a: { name: string }, b: { name: string }) =>
 const POSITION_ORDER: Employee["position"][] = ["SUPERVISOR", "TEAM_LEADER", "ELECTRICIAN", "MECHANIC"];
 
 export function buildModel(snapshot: Snapshot): Model {
+  const settings = normalizeSettings(snapshot.settings);
+  applySettings(settings);
   const employees = [...snapshot.employees].sort(byName);
   // Zgodność wstecz: projekty z wersji 0.4 miały needElectricians/needMechanics zamiast faz, bez kategorii.
   const projects = [...snapshot.projects]
@@ -358,8 +401,14 @@ export function buildModel(snapshot: Snapshot): Model {
     );
   };
 
+  const leaves = [...(snapshot.leaves ?? [])].sort((a, b) => a.from.localeCompare(b.from));
+  const leaveById = new Map(leaves.map((l) => [l.id, l]));
+  const leavesByEmployee = new Map<string, LeaveRequest[]>();
+  for (const l of leaves) leavesByEmployee.set(l.employeeId, [...(leavesByEmployee.get(l.employeeId) ?? []), l]);
+
   return {
     snapshot,
+    settings,
     employees,
     projects,
     assignments,
@@ -373,6 +422,13 @@ export function buildModel(snapshot: Snapshot): Model {
     activeAssignment,
     team,
     rows,
+    leaves,
+    leaveById,
+    leavesOf: (employeeId) => leavesByEmployee.get(employeeId) ?? [],
+    leaveOn: (employeeId, date) =>
+      (leavesByEmployee.get(employeeId) ?? []).find(
+        (l) => (l.status === "APPROVED" || l.status === "PENDING") && l.from <= date && l.to >= date
+      ),
     projectsOf(employeeId, date = today) {
       const a = activeAssignment(employeeId, date);
       if (a) return [projectById.get(a.projectId)].filter((p): p is Project => Boolean(p));

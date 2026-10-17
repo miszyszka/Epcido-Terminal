@@ -1,5 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
-import { canApprove } from "../domain/permissions";
+import { canApprove, canDecideLeave } from "../domain/permissions";
+import type { LeaveRequest } from "../domain/types";
 import { deadlineSummary, queueFor, withheldInScope, type DeadlineSummary, type QueueItem } from "../domain/workflow";
 import { useData } from "./DataContext";
 
@@ -30,4 +31,13 @@ export function useQueue(): { items: QueueItem[]; summary: DeadlineSummary | nul
     const items = queueFor(model, user, now);
     return { items, summary: deadlineSummary(items, now, withheldInScope(model, user, now).length) };
   }, [model, user, now]);
+}
+
+/** Wnioski, które zalogowana osoba może teraz rozpatrzyć (czekające na akceptację). */
+export function usePendingLeaves(): LeaveRequest[] {
+  const { model, user } = useData();
+  return useMemo(() => {
+    if (!model || !user) return [];
+    return model.leaves.filter((l) => l.status === "PENDING" && canDecideLeave(model, user, l));
+  }, [model, user]);
 }

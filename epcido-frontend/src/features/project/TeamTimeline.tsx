@@ -1,12 +1,14 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Scissors, Trash2, UserPlus, X } from "lucide-react";
+import { Scissors, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { useModel } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { DatePicker } from "../../components/DatePicker";
 import { EmploymentTag, PositionMark } from "../../components/PersonBadge";
 import type { DraftAssignment } from "../../data/commands";
 import { defaultTask, TASK_SUGGESTIONS } from "../../domain/labels";
-import type { Employee } from "../../domain/types";
+import { needOf } from "../../domain/staffing";
+import type { DemandPhase, Employee, LeaveRequest } from "../../domain/types";
+import { leaveNote } from "../../domain/workflow";
 import {
   addDays,
   daysBetween,
@@ -23,7 +25,8 @@ import { newId } from "../../lib/random";
 import { daysCount } from "../../lib/text";
 
 const DAY = 24;
-const NAME_W = 220;
+/** Kolumna nazwisk: mieści pełne imię i nazwisko w dwóch liniach (tokens: --plan-name) */
+const NAME_W = 300;
 /** Oś sięga tyle tygodni za najdalej zaplanowane zadanie (≈ 3 miesiące). */
 const AHEAD_WEEKS = 13;
 const BREAK_LENGTHS = [7, 10, 14];
@@ -37,6 +40,10 @@ interface TeamTimelineProps {
   onChange: (next: DraftAssignment[]) => void;
   editable: boolean;
   onAssign: () => void;
+  /** Zapotrzebowanie projektu (fazy) — wiersz z obsadą tydzień po tygodniu */
+  demand?: DemandPhase[];
+  /** Propozycja obsady (Planning) */
+  onPropose?: () => void;
 }
 
 type DragMode = "move" | "start" | "end";
@@ -48,7 +55,7 @@ type DragMode = "move" | "start" | "end";
  * Kliknięcie w puste miejsce wiersza dodaje osobie kolejne zadanie. Oś sięga zawsze ~3 miesiące
  * za najdalej zaplanowane zadanie i rośnie razem z planem.
  */
-export function TeamTimeline({ projectId, start, end, supervisorId, draft, onChange, editable, onAssign }: TeamTimelineProps) {
+export function TeamTimeline({ projectId, start, end, supervisorId, draft, onChange, editable, onAssign, demand = [], onPropose }: TeamTimelineProps) {
   const model = useModel();
   const { toast } = useUi();
   const today = todayISO();
@@ -199,10 +206,18 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
           </span>
         </div>
         {editable && (
-          <button type="button" className="btn btn--primary" onClick={onAssign}>
-            <UserPlus size={18} aria-hidden />
-            Przypisz pracowników
-          </button>
+          <div className="plan__actions">
+            {onPropose && (
+              <button type="button" className="btn btn--secondary" onClick={onPropose}>
+                <Sparkles size={17} aria-hidden />
+                Zaproponuj obsadę
+              </button>
+            )}
+            <button type="button" className="btn btn--primary" onClick={onAssign}>
+              <UserPlus size={18} aria-hidden />
+              Przypisz pracowników
+            </button>
+          </div>
         )}
       </div>
 
@@ -265,13 +280,53 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
             {today >= rangeStart && today <= rangeEnd && <span className="plan__today" style={{ left: x(today) + DAY / 2 }} />}
           </div>
 
+          {/* Zapotrzebowanie: ilu potrzeba i ilu jest w planie, tydzień po tygodniu (słupki E i M) */}
+          {demand.length > 0 && (
+            <div className="plan__row plan__row--demand">
+              <div className="plan__name plan__name--demand">
+                <span className="plan__who">
+                  <span className="plan__person">Zapotrzebowanie</span>
+                  <span className="plan__meta">w planie / potrzeba</span>
+                </span>
+              </div>
+              <div className="plan__track">
+                {weeksIn(rangeStart, rangeEnd).map((w) => {
+                  const need = needOf(demand, w);
+                  if (!need.defined) return null;
+                  const friday = addDays(w, 4);
+                  const present = (trade: Employee["trade"]) =>
+                    new Set(
+                      draft
+                        .filter((d) => d.from <= friday && (d.to ?? openEnd) >= w && model.employeeById.get(d.employeeId)?.trade === trade)
+                        .map((d) => d.employeeId)
+                    ).size;
+                  const el = present("ELECTRICAL");
+                  const me = present("MECHANICAL");
+                  return (
+                    <span
+                      key={w}
+                      className="plan-need"
+                      style={{ left: x(w) + 3, width: 7 * DAY - 6 }}
+                      data-tip={`Tydzień od ${formatDate(w)}\nElektrycy: ${el} z ${need.electricians}\nMechanicy: ${me} z ${need.mechanics}`}
+                    >
+                      <NeedBar trade="el" have={el} need={need.electricians} />
+                      <NeedBar trade="me" have={me} need={need.mechanics} />
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Supervisor: cały projekt */}
           <div className="plan__row">
           <div className="plan__name">
             {supervisor ? (
               <>
                 <PositionMark employee={supervisor} />
-                <span>{supervisor.name}</span>
+                <span className="plan__who">
+                  <span className="plan__person">{supervisor.name}</span>
+                </span>
               </>
             ) : (
               <span className="muted">Supervisor nie wybrany</span>
@@ -287,6 +342,7 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
                   </span>
                 ) : null;
               })()}
+            {supervisor && <Leaves leaves={model.leavesOf(supervisor.id)} span={span} />}
           </div>
           </div>
 
@@ -311,9 +367,15 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
                   <div className="plan__row" key={employee.id}>
                     <div className="plan__name">
                       <PositionMark employee={employee} />
-                      <span>{employee.name}</span>
-                      <EmploymentTag employee={employee} />
-                      {bars.length > 1 && <em className="plan__count">{bars.length} zad.</em>}
+                      <span className="plan__who">
+                        <span className="plan__person" title={employee.name}>
+                          {employee.name}
+                        </span>
+                        <span className="plan__meta">
+                          <EmploymentTag employee={employee} />
+                          {bars.length > 1 && <em className="plan__count">{bars.length} zadania</em>}
+                        </span>
+                      </span>
                       {editable && (
                         <button
                           type="button"
@@ -421,6 +483,7 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
                           </span>
                         );
                       })}
+                      <Leaves leaves={model.leavesOf(employee.id)} span={span} />
                     </div>
                   </div>
                 );
@@ -550,6 +613,64 @@ function TaskPanel({
       )}
     </section>
   );
+}
+
+/** Urlopy osoby na jej wierszu: zaakceptowane (z osobą akceptującą), L4, wnioski czekające — kreskowane. */
+function Leaves({ leaves, span }: { leaves: LeaveRequest[]; span: (from: ISODate, to: ISODate) => { left: number; width: number } | null }) {
+  return (
+    <>
+      {leaves
+        .filter((l) => l.status === "APPROVED" || l.status === "PENDING")
+        .map((l) => {
+          const s = span(l.from, l.to);
+          if (!s) return null;
+          const kind = l.status === "PENDING" ? "pending" : l.type === "SICK" ? "sick" : "leave";
+          const label = l.type === "SICK" ? "L4" : l.status === "PENDING" ? "Wniosek o urlop" : l.type === "OTHER" ? "Nieobecność" : "Urlop";
+          const who = l.status === "APPROVED" && l.type !== "SICK" && l.decidedByName ? ` · ${l.decidedByName}` : "";
+          return (
+            <span
+              key={l.id}
+              className={`plan-leave plan-leave--${kind}`}
+              style={{ left: s.left, width: s.width }}
+              data-tip={`${label}: ${formatDate(l.from)} – ${formatDate(l.to)}\n${leaveNote(l)}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {s.width > 40 && (
+                <span>
+                  {label}
+                  {s.width > 150 ? who : ""}
+                </span>
+              )}
+            </span>
+          );
+        })}
+    </>
+  );
+}
+
+/** Słupek obsady jednej branży: wypełnienie = w planie, obrys = potrzeba. */
+function NeedBar({ trade, have, need }: { trade: "el" | "me"; have: number; need: number }) {
+  if (!need && !have) return <span className={`need-bar need-bar--${trade} is-empty`} />;
+  const max = Math.max(need, have, 1);
+  return (
+    <span className={`need-bar need-bar--${trade} ${need && have < need ? "is-short" : ""}`}>
+      <b>{trade === "el" ? "E" : "M"}</b>
+      <span className="need-bar__track">
+        <span className="need-bar__need" style={{ width: `${(need / max) * 100}%` }} />
+        <span className="need-bar__fill" style={{ width: `${(have / max) * 100}%` }} />
+      </span>
+      <em>
+        {have}/{need}
+      </em>
+    </span>
+  );
+}
+
+function weeksIn(from: ISODate, to: ISODate): ISODate[] {
+  const out: ISODate[] = [];
+  for (let w = startOfWeek(from); w <= to; w = addDays(w, 7)) out.push(w);
+  return out;
 }
 
 function Fragment({ children }: { children: React.ReactNode }) {

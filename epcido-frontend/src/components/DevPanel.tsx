@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, Database, PanelLeftClose } from "lucide-react";
 import { useData } from "../app/DataContext";
 import { useSession } from "../app/SessionContext";
-import { PERMISSION_LABEL, PERMISSION_ORDER, ROLE_PERMISSIONS, homeFor } from "../domain/permissions";
+import { PERMISSION_LABEL, PERMISSION_ORDER, ROLE_PERMISSIONS, homeFor, permissionsOf, type Permission } from "../domain/permissions";
 import type { AccessRole, Employee } from "../domain/types";
 import { PositionMark } from "./PersonBadge";
 import { SelectMenu } from "./SelectMenu";
@@ -22,6 +22,8 @@ const ROWS: RoleRow[] = [
   { key: "pm", label: "Project Manager", short: "PM", role: "PROJECT_MANAGER", match: (e) => e.role === "PROJECT_MANAGER" },
   { key: "im", label: "Installation Manager", short: "IM", role: "INSTALLATION_MANAGER", match: (e) => e.role === "INSTALLATION_MANAGER" },
   { key: "sv", label: "Supervisor", short: "SV", role: "SUPERVISOR", match: (e) => e.role === "SUPERVISOR" },
+  { key: "hr", label: "HR", short: "HR", role: "HR", match: (e) => e.role === "HR" },
+  { key: "custom", label: "Własne uprawnienia", short: "WŁ", role: "CUSTOM", match: (e) => e.role === "CUSTOM" },
   { key: "tl", label: "Team Leader", short: "TL", role: "WORKER", match: (e) => e.position === "TEAM_LEADER" },
   {
     key: "worker",
@@ -53,7 +55,12 @@ export function DevPanel() {
 
   const activeRow = current ? ROWS.find((r) => r.match(current)) : undefined;
   const seeded = model?.snapshot.seeded ?? false;
-  const outdated = Boolean(model && seeded && (model.snapshot.seedVersion ?? 1) < 5);
+  const outdated = Boolean(model && seeded && (model.snapshot.seedVersion ?? 1) < 6);
+  const rolePerms = (r: RoleRow): Set<Permission> => {
+    if (r.role !== "CUSTOM") return new Set(ROLE_PERMISSIONS[r.role]);
+    const someone = model?.employees.find(r.match);
+    return someone ? permissionsOf(someone) : new Set();
+  };
 
   return (
     <aside className="devpanel" aria-label="Panel roboczy">
@@ -133,7 +140,7 @@ export function DevPanel() {
                 <tr key={p}>
                   <th scope="row">{PERMISSION_LABEL[p]}</th>
                   {ROWS.map((r) => {
-                    const yes = ROLE_PERMISSIONS[r.role].includes(p);
+                    const yes = rolePerms(r).has(p);
                     return (
                       <td key={r.key} className={r === activeRow ? "is-active" : ""}>
                         {yes ? <Check size={14} aria-label="tak" /> : <span aria-label="nie">·</span>}

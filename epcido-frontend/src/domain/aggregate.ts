@@ -2,7 +2,7 @@
 
 import type { Model } from "../app/DataContext";
 import { addDays, startOfWeek, toISO, type ISODate } from "../lib/dates";
-import { oursShare } from "./staffing";
+import { epcidoShare } from "./staffing";
 import { sheetsFor } from "./timesheets";
 import { countTimesheets, isFinal, isWeekClosed } from "./workflow";
 
@@ -14,8 +14,8 @@ export interface ProjectStats {
   absences: number;
   /** Ostatni dzień tygodnia wysłanego do Dataverse */
   lastSent: ISODate | null;
-  /** Ludzie dziś: nasi (UoP, B2B) i agencja */
-  ours: number;
+  /** Ludzie dziś: EPCIDO (UoP, B2B) i agencja */
+  epcido: number;
   agency: number;
 }
 
@@ -36,6 +36,6 @@ export function projectStats(model: Model, projectId: string, now: Date, from?: 
     if (sheets.get(projectId, week)?.status === "sent") lastSent = addDays(week, 6);
   }
   const team = model.team(projectId);
-  const share = oursShare(model, (team?.members ?? []).map((m) => m.id));
-  return { pending: countTimesheets(pending), withheldWeeks, absences, lastSent, ours: share.ours, agency: share.agency };
+  const share = epcidoShare(model, (team?.members ?? []).map((m) => m.id));
+  return { pending: countTimesheets(pending), withheldWeeks, absences, lastSent, epcido: share.epcido, agency: share.agency };
 }

@@ -44,6 +44,18 @@ service cloud.firestore {
       allow read, write: if testWindowOpen();
     }
 
+    // Wnioski o nieobecność: tylko znane rodzaje i stany, daty od–do.
+    match /leaves/{id} {
+      allow read, delete: if testWindowOpen();
+      allow create, update: if testWindowOpen()
+        && request.resource.data.employeeId is string
+        && request.resource.data.type in ['LEAVE', 'SICK', 'OTHER']
+        && request.resource.data.status in ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']
+        && request.resource.data.from is string
+        && request.resource.data.to is string
+        && request.resource.data.to >= request.resource.data.from;
+    }
+
     match /meta/{id} {
       allow read, write: if testWindowOpen();
     }
