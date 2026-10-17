@@ -4,17 +4,16 @@ import { ChevronDown } from "lucide-react";
 import { useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { useNow } from "../../app/hooks";
-import { MissedMark, SentMark } from "../../components/DayCell";
-import { PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { MissedMark } from "../../components/DayCell";
+import { CategoryTag, PositionMark, ProjectDot } from "../../components/PersonBadge";
 import { projectStats } from "../../domain/aggregate";
-import { CATEGORY_LABEL, PROJECT_STATUS_LABEL } from "../../domain/labels";
+import { PROJECT_STATUS_LABEL } from "../../domain/labels";
 import { timesheetsNom } from "../../domain/workflow";
 import { isoWeek } from "../../lib/dates";
 import { canEditProject } from "../../domain/permissions";
 import type { Project } from "../../domain/types";
 import { formatDate, type ISODate } from "../../lib/dates";
 import { cityOf } from "../../lib/search";
-import { absences, people as peopleCount } from "../../lib/text";
 import { ProjectDays } from "./ProjectDays";
 
 interface ProjectCardProps {
@@ -72,7 +71,7 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
             <span>{project.name}</span>
           </button>
           <span className="pcard__number">{project.number}</span>
-          <span className={`cat cat--${project.category.toLowerCase()}`}>{CATEGORY_LABEL[project.category]}</span>
+          <CategoryTag category={project.category} />
         </div>
         <div className="pcard__meta">
           <span>
@@ -85,36 +84,18 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
             </span>
           )}
         </div>
+        {/* Po prawej tylko to, co wymaga działania: do zatwierdzenia i niewysłany tydzień. Wysłane widać po ptaszkach i paskach. */}
         <div className="pcard__stats">
-          {project.status === "PLANNED" ? (
+          {project.status === "PLANNED" && (
             <span className="badge badge--status">
               {PROJECT_STATUS_LABEL.PLANNED}, start {formatDate(project.startDate)}
-            </span>
-          ) : (
-            <span className="muted">{peopleCount(rows.length)}</span>
-          )}
-          {stats.ours + stats.agency > 0 && (
-            <span
-              className={`ours-chip ${stats.agency > stats.ours ? "is-warn" : ""}`}
-              data-tip={`Nasi (UoP i B2B): ${stats.ours}, agencja: ${stats.agency}. Cel: co najmniej połowa naszych.`}
-            >
-              nasi {stats.ours} · agencja {stats.agency}
             </span>
           )}
           {stats.pending > 0 && <span className="badge badge--pending">Do zatwierdzenia: {timesheetsNom(stats.pending)}</span>}
           {stats.withheldWeeks.length > 0 && (
-            <span className="badge badge--missed" data-tip="Timesheet z błędami (brak zatwierdzenia albo wpisu) — nie poszedł do Dataverse. Poprawia administrator.">
+            <span className="badge badge--alarm" data-tip="Timesheet z błędami (brak zatwierdzenia albo wpisu) — nie poszedł do Dataverse. Poprawia administrator.">
               <MissedMark size={10} />
               Nie wysłany: {stats.withheldWeeks.map((w) => `tydz. ${isoWeek(w).week}`).join(", ")}
-            </span>
-          )}
-          {stats.absences > 0 && variant === "detailed" && <span className="badge badge--neutral">{absences(stats.absences)}</span>}
-          {stats.lastSent && (
-            <span className="pcard__sent">
-              <span className="sent-chip" aria-hidden>
-                <SentMark size={10} />
-              </span>
-              W Dataverse do {formatDate(stats.lastSent)}
             </span>
           )}
         </div>

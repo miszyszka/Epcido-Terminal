@@ -7,10 +7,12 @@ interface DialogProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** lg = szersze okno (listy z wieloma kolumnami) */
+  size?: "md" | "lg";
 }
 
 /** Okno na środku ekranu; w wąskim widoku wysuwa się od dołu. Escape i tło zamykają. */
-export function Dialog({ title, description, onClose, children, footer }: DialogProps) {
+export function Dialog({ title, description, onClose, children, footer, size = "md" }: DialogProps) {
   const panel = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   useEffect(() => {
@@ -33,7 +35,7 @@ export function Dialog({ title, description, onClose, children, footer }: Dialog
   return (
     <div className="dialog-root">
       <div className="dialog-backdrop" onClick={onClose} aria-hidden />
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={title} ref={panel}>
+      <div className={`dialog dialog--${size}`} role="dialog" aria-modal="true" aria-label={title} ref={panel}>
         <header className="dialog__head">
           <div>
             <h2 className="dialog__title">{title}</h2>

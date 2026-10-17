@@ -4,7 +4,7 @@ import { useData } from "../app/DataContext";
 import { useQueue } from "../app/hooks";
 import { useSession } from "../app/SessionContext";
 import { useUi } from "../app/UiContext";
-import { ROLE_LABEL } from "../domain/labels";
+import { POSITION_LABEL, ROLE_LABEL } from "../domain/labels";
 import { can, canApprove, homeFor } from "../domain/permissions";
 import { formatRemaining, timesheetsGen, timesheetsNom } from "../domain/workflow";
 import { GlobalSearch } from "./GlobalSearch";
@@ -39,7 +39,7 @@ export function TopBar() {
           <span className="topbar__greeting">
             Cześć, <strong>{user.name}</strong>
           </span>
-          <span className="topbar__role">{ROLE_LABEL[user.role]}</span>
+          <span className="topbar__role">{user.role === "CUSTOM" ? POSITION_LABEL[user.position] : ROLE_LABEL[user.role]}</span>
         </div>
       )}
 

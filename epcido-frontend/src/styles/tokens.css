@@ -47,6 +47,17 @@
   --missed-bg: repeating-linear-gradient(135deg, #e3e7e6 0 3px, #c9d0ce 3px 5px);
   --missed-ink: #4a5553;
 
+  /* Branże — stałe kolory w całym systemie: elektrycy czerwień, mechanicy błękit.
+     Tylko przy branży (znacznik E/M, słupki obsady, wykresy), nigdy jako stan dnia. */
+  --el: #d2373c;
+  --el-ink: #a3222a;
+  --el-soft: #fbe4e3;
+  --el-line: #f0b3b1;
+  --me: #2b67d1;
+  --me-ink: #1d4b99;
+  --me-soft: #e1ebfb;
+  --me-line: #b3cbf2;
+
   /* Typografia: Plus Jakarta Sans — geometryczna jak Poppins, spokojna jak Helvetica; liczby tabelaryczne.
      Kontrast grubości: tytuły 750–800, treść 400, opisy 300. */
   --font: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;

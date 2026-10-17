@@ -52,7 +52,7 @@ export function DataGate({ children }: { children: React.ReactNode }) {
   }
 
   const version = data.model.snapshot.seedVersion;
-  if (data.model.snapshot.seeded && version !== null && version < 5) {
+  if (data.model.snapshot.seeded && version !== null && version < 6) {
     return (
       <section className="gate">
         <h2>Dane testowe są ze starszej wersji</h2>

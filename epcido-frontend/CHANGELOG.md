@@ -2,6 +2,37 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje: SemVer.
 
+## [0.6.0] - 2026-10-17
+
+### Nowe funkcje
+- **Urlopy z akceptacją.** Pracownik składa wniosek (urlop, inna nieobecność) albo zgłasza L4 — L4 obowiązuje od razu, HR potwierdza dokument. Akceptuje supervisor albo Installation Manager projektu, w którym osoba wtedy pracuje, albo HR; odrzucenie wymaga powodu. Zaakceptowane dni trafiają do timesheetu jako nieobecność (zatwierdzona).
+- **Ekran Urlopy** (SV, IM, HR, administrator): wnioski do akceptacji z wpływem na obsadę projektu („elektrycy w tygodniu 19.10: 6 → 5 z 8") i listą osób, które w tym czasie też mają wolne; L4 do potwierdzenia; kalendarz nieobecności na 8 tygodni; ostatnie decyzje z „Cofnij"; wpisanie nieobecności za pracownika.
+- **Urlopy w planie zespołu**: blok na wierszu osoby — kto zaakceptował i kiedy; wnioski czekające kreskowane. Urlopy także w Obsadzie, na mapie i osi czasu (dymek dnia).
+- **Moje wnioski** na ekranie pracownika: stan, kto zaakceptował, powód odrzucenia, anulowanie czekającego.
+- **HR i użytkownicy z własnymi uprawnieniami.** Rola HR (ludzie, urlopy wszystkich, L4). Administrator dodaje użytkowników (np. HR, controlling) z rolą albo z ręcznie zaznaczonymi funkcjami.
+- **Użytkownicy** (administrator): wszyscy użytkownicy, rola, liczba uprawnień, dodane i odebrane; zmiana roli i pojedynczych uprawnień, wyłączanie kont.
+- **Raporty** (administrator): 7 raportów do Excela (.xlsx) — godziny szczegółowo, timesheety, godziny na osobę, urlopy, obsada, pracownicy, wstrzymane timesheety; filtry dat, projektów, branży, umowy i stanu godzin; podgląd przed pobraniem. Pobranie zapisuje się w dzienniku.
+- **Ustawienia systemu** (administrator): termin zatwierdzania i godzina wysyłki do Dataverse, kategorie projektów, oddziały, minimalny udział EPCIDO, przerwa na wyjazd, „długo bez przerwy".
+- **Obsada 3.0**:
+  - w komórkach projektów dwa słupki — elektrycy (czerwień) i mechanicy (błękit): obrys = potrzeba, wypełnienie = w planie, kreski = urlop; pod słupkiem brak „−2";
+  - wykres siły roboczej (potrzeba, w planie, wolni) zamiast tabeli liczb;
+  - „Wymaga uwagi": braki przed startem projektów, tygodnie bez rezerwy, za mało EPCIDO, długo bez przerwy, urlopy, ludzie bez przydziału — z akcjami;
+  - przeciągnięcie osoby na tydzień projektu od razu dodaje ją do końca fazy (z „Cofnij"), podgląd nad komórką; z Shift — okno z opcjami;
+  - **propozycja obsady**: brakujący ludzie dobrani automatycznie (dostępność, EPCIDO przed agencją, bez urlopu, staż w kategorii), zaznacz i dodaj jednym kliknięciem;
+  - kliknięcie projektu otwiera od razu plan zespołu;
+  - filtry ludzi: EPCIDO / agencja, suwaki stażu łącznie i w kategorii (także w Ludziach).
+- **Plan zespołu**: wiersz „Zapotrzebowanie" ze słupkami E/M tydzień po tygodniu, „Zaproponuj obsadę", pełne imiona i nazwiska (kolumna 300 px, dwie linie), dane projektu można zwinąć.
+
+### Zmiany
+- Kolory branż w całym systemie: E — czerwień, M — błękit (znaczniki, słupki, wykresy); TL z kreską w kolorze branży.
+- „Nasi" → **EPCIDO** wszędzie.
+- Mapa: po prawej nad projektem tylko „Do zatwierdzenia" i czerwone „! Nie wysłany: tydz. N" — bez liczby osób, EPCIDO/agencji i „W Dataverse do".
+- Pracownicy i Team Leaderzy nie widzą informacji o wysyłce i wstrzymanych timesheetach — dla nich tydzień jest „zamknięty".
+- Baner terminu: płaska karta bez gradientu, termin i wysyłka po prawej.
+- Dock: licznik jako pigułka w jednej linii z nazwą; narzędzia administratora (Raporty, Użytkownicy, Ustawienia) jako ikony.
+- Uprawnienia: rola + dodane − odebrane; sprawdzenia „czy administrator" zastąpione uprawnieniami.
+- Dane testowe v6.
+
 ## [0.5.0] - 2026-10-17
 
 ### Nowe funkcje

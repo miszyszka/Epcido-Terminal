@@ -5,7 +5,7 @@ import { DatePicker } from "../../components/DatePicker";
 import { Field, TextInput } from "../../components/Field";
 import { SelectMenu } from "../../components/SelectMenu";
 import { Segmented } from "../../components/Segmented";
-import { BRANCHES, CATEGORIES, CATEGORY_LABEL, PROJECT_COLORS, PROJECT_STATUS_LABEL } from "../../domain/labels";
+import { branches, categories, PROJECT_COLORS, PROJECT_STATUS_LABEL } from "../../domain/labels";
 import type { DemandPhase, Project, ProjectCategory, ProjectInput, ProjectStatus } from "../../domain/types";
 import { addDays, todayISO } from "../../lib/dates";
 import { newId } from "../../lib/random";
@@ -46,7 +46,7 @@ export function emptyProjectInput(projects: Project[], pmId: string | null): Pro
     projectManagerId: pmId,
     installationManagerId: null,
     supervisorId: null,
-    category: "KNAPP",
+    category: categories()[0],
     demand: [],
     dataverseId: "",
     dataverseNumber: "",
@@ -100,7 +100,7 @@ export function ProjectForm({ values, onChange: set, errors, projectId, readOnly
             label="Kategoria projektu"
             value={values.category}
             onChange={(v) => set("category", v)}
-            options={CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))}
+            options={categories().map((c) => ({ value: c, label: c }))}
           />
         </Field>
       </section>
@@ -204,7 +204,7 @@ export function ProjectForm({ values, onChange: set, errors, projectId, readOnly
               id="f-branch"
               value={values.branch || null}
               onChange={(v) => set("branch", v)}
-              options={BRANCHES.map((b) => ({ value: b, label: b }))}
+              options={branches().map((b) => ({ value: b, label: b }))}
               placeholder="Wybierz oddział"
               invalid={!!errors.branch}
               disabled={readOnly}

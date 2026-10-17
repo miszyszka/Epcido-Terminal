@@ -1,4 +1,5 @@
-import type { AbsenceType, AccessRole, DayEntry, DayState, Employment, Position, ProjectCategory, ProjectStatus, Trade } from "./types";
+import { getSettings } from "./settings";
+import type { AbsenceType, AccessRole, DayEntry, DayState, Employment, LeaveStatus, Position, ProjectCategory, ProjectStatus, Trade } from "./types";
 
 export const POSITION_LABEL: Record<Position, string> = {
   ADMIN: "Administrator",
@@ -9,6 +10,8 @@ export const POSITION_LABEL: Record<Position, string> = {
   TEAM_LEADER: "Team Leader",
   ELECTRICIAN: "Elektryk",
   MECHANIC: "Mechanik",
+  HR: "HR",
+  OFFICE: "Biuro",
 };
 
 export const POSITION_SHORT: Record<Position, string> = {
@@ -20,6 +23,8 @@ export const POSITION_SHORT: Record<Position, string> = {
   TEAM_LEADER: "TL",
   ELECTRICIAN: "E",
   MECHANIC: "M",
+  HR: "HR",
+  OFFICE: "BI",
 };
 
 export const ROLE_LABEL: Record<AccessRole, string> = {
@@ -28,12 +33,20 @@ export const ROLE_LABEL: Record<AccessRole, string> = {
   PROJECT_MANAGER: "Project Manager",
   INSTALLATION_MANAGER: "Installation Manager",
   SUPERVISOR: "Supervisor",
+  HR: "HR",
   WORKER: "Pracownik",
+  CUSTOM: "Własne uprawnienia",
 };
 
 export const TRADE_LABEL: Record<Trade, string> = {
   ELECTRICAL: "elektryka",
   MECHANICAL: "mechanika",
+};
+
+/** Branże mają w całym systemie stałe kolory: elektrycy — czerwień, mechanicy — błękit (tokens.css: --el, --me). */
+export const TRADE_PLURAL: Record<Trade, string> = {
+  ELECTRICAL: "Elektrycy",
+  MECHANICAL: "Mechanicy",
 };
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -51,13 +64,21 @@ export const DAY_STATE_LABEL: Record<DayState, string> = {
   missed: "Błąd w timesheecie — nie wysłany",
 };
 
-export const CATEGORIES: ProjectCategory[] = ["KNAPP", "KARDEX", "FORTNA", "OTHER"];
-export const CATEGORY_LABEL: Record<ProjectCategory, string> = {
-  KNAPP: "KNAPP",
-  KARDEX: "KARDEX",
-  FORTNA: "FORTNA",
-  OTHER: "OTHER",
-};
+/** Kategorie projektów z ustawień systemu (domyślnie KNAPP, KARDEX, FORTNA, OTHER). */
+export function categories(): ProjectCategory[] {
+  return getSettings().categories;
+}
+
+/** Oddziały z ustawień systemu. */
+export function branches(): string[] {
+  return getSettings().branches;
+}
+
+/** Kategorie z własnym kolorem etykiety; pozostałe dostają neutralny. */
+const KNOWN_CATEGORIES = ["KNAPP", "KARDEX", "FORTNA", "OTHER"];
+export function categoryClass(c: ProjectCategory): string {
+  return KNOWN_CATEGORIES.includes(c) ? `cat--${c.toLowerCase()}` : "cat--custom";
+}
 
 export const EMPLOYMENT_LABEL: Record<Employment, string> = {
   UOP: "UoP",
@@ -69,10 +90,11 @@ export const EMPLOYMENT_LONG: Record<Employment, string> = {
   B2B: "Kontrakt B2B",
   AGENCY: "Pracownik agencji",
 };
-/** „Nasi" = UoP i B2B. Na projekcie co najmniej połowa powinna być nasza. */
-export function isOurs(e: { employment?: Employment }): boolean {
+/** EPCIDO = nasi ludzie (UoP i B2B). Na projekcie co najmniej połowa (ustawienia) powinna być z EPCIDO. */
+export function isEpcido(e: { employment?: Employment }): boolean {
   return e.employment !== "AGENCY";
 }
+export const EPCIDO = "EPCIDO";
 
 /** Zwięźle: 8 → „8 mies.", 26 → „2 lata", 130 → „10 lat". */
 export function formatMonthsShort(m: number): string {
@@ -105,7 +127,12 @@ export const ABSENCE_SHORT: Record<AbsenceType, string> = {
   OTHER: "Inna",
 };
 
-export const BRANCHES = ["Polska", "Wielka Brytania", "Niemcy", "Beneluks", "Skandynawia", "Francja", "Czechy"];
+export const LEAVE_STATUS_LABEL: Record<LeaveStatus, string> = {
+  PENDING: "Czeka na akceptację",
+  APPROVED: "Zaakceptowany",
+  REJECTED: "Odrzucony",
+  CANCELLED: "Anulowany",
+};
 
 /**
  * Kolory identyfikacyjne projektów — brandbook 2.4. Rozstawione po całym kole barw, o podobnej jasności,

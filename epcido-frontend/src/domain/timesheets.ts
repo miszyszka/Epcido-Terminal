@@ -1,7 +1,7 @@
 // Timesheet = wszystkie godziny wszystkich osób w jednym projekcie w jednym tygodniu (ADR 0010).
 // W każdym tygodniu jest tyle timesheetów, ile projektów.
 //
-// Cykl:
+// Cykl (terminy w ustawieniach systemu, domyślnie pn 23:59 i wt 23:00):
 //   otwarty   — do poniedziałku 23:59 po tygodniu: wpisy, poprawki, zatwierdzanie,
 //   zamknięty — od wtorku 00:00; gdy kompletny (każdy dzień roboczy ma wpis, wszystko zatwierdzone do końca),
 //               jest nienaruszalny i idzie do Dataverse we wtorek o 23:00 → „wysłany",
@@ -172,10 +172,21 @@ function baseState(entry: DayEntry | undefined): DayState {
   return "pending";
 }
 
-/** Jak wygląda dzień jednej osoby w projekcie: stan, wysłanie, zamknięcie, błąd. */
-export function cellView(sheets: SheetIndex, projectId: string, employeeId: string, date: ISODate, entry: DayEntry | undefined): CellView {
+/**
+ * Jak wygląda dzień jednej osoby w projekcie: stan, wysłanie, zamknięcie, błąd.
+ * `hideDispatch` — dla pracownika i TL: zamknięty tydzień bez informacji o wysyłce i wstrzymaniu.
+ */
+export function cellView(
+  sheets: SheetIndex,
+  projectId: string,
+  employeeId: string,
+  date: ISODate,
+  entry: DayEntry | undefined,
+  hideDispatch = false
+): CellView {
   const sheet = sheets.of(projectId, date);
   if (!sheet || sheet.status === "open") return { state: baseState(entry), sent: false, closed: false, missing: false };
+  if (hideDispatch) return { state: baseState(entry), sent: false, closed: true, missing: false };
   if (sheet.status === "withheld") {
     const problem = sheets.problemAt(projectId, employeeId, date);
     if (problem) return { state: "missed", sent: false, closed: true, missing: problem.kind === "missing" };

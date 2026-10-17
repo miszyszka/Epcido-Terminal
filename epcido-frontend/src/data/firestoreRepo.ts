@@ -5,6 +5,8 @@
 //   projects/{id}         — projekty
 //   assignments/{id}      — kto jest w którym zespole
 //   timesheets/{projectId}_{poniedziałek} — karta tygodnia projektu, dni wszystkich osób
+//   leaves/{id}           — wnioski o nieobecność (urlop, L4, inna)
+//   meta/settings         — ustawienia systemu (administrator)
 //   auditLog/{id}         — dziennik zmian, tylko dopisywanie
 //   meta/seed             — znacznik wgranych danych testowych
 
@@ -22,7 +24,7 @@ import { getDb } from "../lib/firebase";
 import type { AuditEvent } from "../domain/types";
 import type { ChangeSet, CollectionName, RepoError, Repository, Snapshot } from "./repository";
 
-const COLLECTIONS: CollectionName[] = ["employees", "projects", "assignments", "timesheets"];
+const COLLECTIONS: CollectionName[] = ["employees", "projects", "assignments", "timesheets", "leaves"];
 const BATCH_LIMIT = 450; // Firestore przyjmuje maks. 500 operacji w jednym batchu
 
 export function createFirestoreRepository(): Repository {
@@ -36,17 +38,20 @@ export function createFirestoreRepository(): Repository {
       let audit: AuditEvent[] | null = null;
       let seeded: boolean | null = null;
       let seedVersion: number | null = null;
+      let settings: Snapshot["settings"] | undefined;
 
       const emit = () => {
-        if (COLLECTIONS.some((c) => !parts[c]) || audit === null || seeded === null) return;
+        if (COLLECTIONS.some((c) => !parts[c]) || audit === null || seeded === null || settings === undefined) return;
         onData({
           employees: parts.employees,
           projects: parts.projects,
           assignments: parts.assignments,
           timesheets: parts.timesheets,
+          leaves: parts.leaves,
           audit,
           seeded,
           seedVersion,
+          settings,
         } as Snapshot);
       };
       const fail = (e: FirestoreError) => onError(toRepoError(e));
@@ -75,6 +80,14 @@ export function createFirestoreRepository(): Repository {
           (snap) => {
             seeded = snap.exists();
             seedVersion = snap.exists() ? Number(snap.data()?.version ?? 1) : null;
+            emit();
+          },
+          fail
+        ),
+        onSnapshot(
+          doc(db, "meta", "settings"),
+          (snap) => {
+            settings = snap.exists() ? (snap.data() as Snapshot["settings"]) : null;
             emit();
           },
           fail

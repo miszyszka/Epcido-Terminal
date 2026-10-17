@@ -9,7 +9,10 @@ export type AccessRole =
   | "PROJECT_MANAGER"
   | "INSTALLATION_MANAGER"
   | "SUPERVISOR"
-  | "WORKER";
+  | "HR"
+  | "WORKER"
+  /** Własny zestaw funkcji — administrator zaznacza uprawnienia ręcznie */
+  | "CUSTOM";
 
 export type Position =
   | "ADMIN"
@@ -19,14 +22,20 @@ export type Position =
   | "SUPERVISOR"
   | "TEAM_LEADER"
   | "ELECTRICIAN"
-  | "MECHANIC";
+  | "MECHANIC"
+  | "HR"
+  /** Biuro: controlling, kadry, księgowość — użytkownicy dodani przez administratora */
+  | "OFFICE";
 
 export type Trade = "ELECTRICAL" | "MECHANICAL";
 
-/** Kategoria projektu = system, który montujemy. */
-export type ProjectCategory = "KNAPP" | "KARDEX" | "FORTNA" | "OTHER";
+/**
+ * Kategoria projektu = system, który montujemy. Lista jest w ustawieniach systemu
+ * (domyślnie KNAPP, KARDEX, FORTNA, OTHER) — administrator może dodać kolejne.
+ */
+export type ProjectCategory = string;
 
-/** Forma zatrudnienia. UoP i B2B to „nasi", agencja — pracownicy z agencji. */
+/** Forma zatrudnienia. UoP i B2B to „EPCIDO" (nasi), agencja — pracownicy z agencji. */
 export type Employment = "UOP" | "B2B" | "AGENCY";
 
 /** Doświadczenie w miesiącach: łącznie i w projektach danej kategorii. */
@@ -48,6 +57,13 @@ export interface Employee {
   employment?: Employment;
   experience?: Experience;
   active: boolean;
+  /** Konto w systemie */
+  email?: string | null;
+  /** Uprawnienia dodane ponad rolę (administrator, ekran Użytkownicy) */
+  grants?: string[];
+  /** Uprawnienia roli odebrane tej osobie */
+  revokes?: string[];
+  createdAt?: string;
 }
 
 export type ProjectStatus = "PLANNED" | "ACTIVE" | "ON_HOLD" | "CLOSED";
@@ -138,6 +154,57 @@ export interface DayEntry {
   exportedAt?: string | null;
   /** Notatka zmian: poprawki pracownika i zmiany osób zatwierdzających */
   history?: EntryChange[] | null;
+  /** Dzień nieobecności z wniosku urlopowego (urlop, L4, inna) — zatwierdzony razem z wnioskiem */
+  leaveId?: string | null;
+}
+
+export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+
+/**
+ * Wniosek o nieobecność: urlop, L4 albo inna. Urlop i inną akceptuje supervisor albo Installation Manager
+ * projektu, w którym osoba wtedy pracuje, albo HR (kto dokładnie — uprawnienia u administratora).
+ * L4 obowiązuje od zgłoszenia; HR potwierdza dokument.
+ * Zaakceptowany wniosek wpisuje dni nieobecności do timesheetów (zatwierdzone).
+ */
+export interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  type: AbsenceType;
+  from: ISODate;
+  to: ISODate;
+  note?: string | null;
+  status: LeaveStatus;
+  createdAt: string;
+  createdById: string;
+  createdByName: string;
+  decidedAt?: string | null;
+  decidedById?: string | null;
+  decidedByName?: string | null;
+  /** Powód odrzucenia albo cofnięcia */
+  decisionNote?: string | null;
+  /** L4: HR potwierdził dokument */
+  confirmedAt?: string | null;
+  confirmedById?: string | null;
+  confirmedByName?: string | null;
+}
+
+/** Ustawienia systemu (administrator). Zapisane w meta/settings. */
+export interface SystemSettings {
+  /** Termin zatwierdzania: dzień po początku tygodnia (7 = poniedziałek następnego tygodnia) */
+  approveDayOffset: number;
+  /** Godzina terminu, np. „23:59" */
+  approveTime: string;
+  /** Wysyłka do Dataverse: dzień po początku tygodnia (8 = wtorek następnego tygodnia) */
+  exportDayOffset: number;
+  exportTime: string;
+  categories: string[];
+  branches: string[];
+  /** Minimalny udział EPCIDO (UoP + B2B) na projekcie, w procentach */
+  minEpcidoShare: number;
+  /** Krótsza luka nie jest przerwą na wyjazd do domu (dni) */
+  breakMinDays: number;
+  /** Od tylu tygodni ciągłej pracy pokazujemy „długo bez przerwy" */
+  longStretchWeeks: number;
 }
 
 /**
@@ -162,6 +229,15 @@ export type AuditAction =
   | "HOURS_APPROVED"
   | "HOURS_EDITED"
   | "MEMBER_REMOVED"
+  | "LEAVE_REQUESTED"
+  | "LEAVE_APPROVED"
+  | "LEAVE_REJECTED"
+  | "LEAVE_CANCELLED"
+  | "LEAVE_CONFIRMED"
+  | "USER_CREATED"
+  | "USER_UPDATED"
+  | "SETTINGS_UPDATED"
+  | "REPORT_EXPORTED"
   | "TEST_DATA_LOADED"
   | "TEST_DATA_CLEARED";
 
@@ -182,6 +258,7 @@ export interface Dataset {
   projects: Project[];
   assignments: Assignment[];
   timesheets: Timesheet[];
+  leaves: LeaveRequest[];
 }
 
 /**

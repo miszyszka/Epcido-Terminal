@@ -6,7 +6,7 @@ import { MissedMark } from "../../components/DayCell";
 import { DeadlineBanner } from "../../components/DeadlineBanner";
 import { PageHeader } from "../../components/PageHeader";
 import { PositionMark, ProjectDot } from "../../components/PersonBadge";
-import { visibleProjects } from "../../domain/permissions";
+import { can, visibleProjects } from "../../domain/permissions";
 import { supervisorStats, timesheetsNom } from "../../domain/workflow";
 
 /** Pulpit Installation Managera (i administratora): supervisorzy i to, co jeszcze muszą zatwierdzić. */
@@ -29,7 +29,7 @@ export function DashboardView() {
   return (
     <div className="page">
       <PageHeader title="Pulpit" />
-      {queue.summary && <DeadlineBanner summary={queue.summary} isAdmin={user.role === "ADMIN"} />}
+      {queue.summary && <DeadlineBanner summary={queue.summary} isAdmin={can(user, "hours.fixWithheld")} />}
 
       <div className="table-card">
         <table className="table table--dash">
@@ -88,7 +88,7 @@ export function DashboardView() {
                   <td>{s.awaitingFinal > 0 ? <span className="count-cell">{timesheetsNom(s.awaitingFinal)}</span> : <span className="muted">—</span>}</td>
                   <td>
                     {s.missed > 0 ? (
-                      <span className="badge badge--missed" data-tip="Nie zatwierdzone do poniedziałku 23:59. Zatwierdzić może tylko administrator.">
+                      <span className="badge badge--missed" data-tip="Nie zatwierdzone na czas. Zatwierdzić może tylko administrator.">
                         <MissedMark size={10} />
                         {s.missed}
                       </span>

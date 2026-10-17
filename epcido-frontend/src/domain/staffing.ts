@@ -3,13 +3,14 @@
 
 import type { Model } from "../app/DataContext";
 import { addDays, daysBetween, startOfWeek, type ISODate } from "../lib/dates";
-import { isOurs } from "./labels";
-import type { Assignment, Employee, Project, ProjectCategory, Trade } from "./types";
+import { isEpcido } from "./labels";
+import { getSettings } from "./settings";
+import type { Assignment, DemandPhase, Employee, LeaveRequest, Project, ProjectCategory, Trade } from "./types";
 
-/** Krótsza luka (np. weekend) nie jest przerwą na wyjazd do domu. */
-export const BREAK_MIN_DAYS = 5;
-/** Od tylu tygodni ciągłej pracy pokazujemy „długo bez przerwy". */
-export const LONG_STRETCH_WEEKS = 8;
+/** Krótsza luka (np. weekend) nie jest przerwą na wyjazd do domu (ustawienia systemu, domyślnie 5 dni). */
+export const breakMinDays = () => getSettings().breakMinDays;
+/** Od tylu tygodni ciągłej pracy pokazujemy „długo bez przerwy" (ustawienia, domyślnie 8). */
+export const longStretchWeeks = () => getSettings().longStretchWeeks;
 /** Ile tygodni naprzód szukamy osób, które się zwalniają. */
 export const RELEASE_HORIZON_WEEKS = 8;
 
@@ -36,7 +37,7 @@ export function workChains(model: Model, employeeId: string): Chain[] {
   for (const a of list) {
     const end = assignmentEnd(model, a);
     const last = chains[chains.length - 1];
-    if (last && daysBetween(last.to, a.from) - 1 < BREAK_MIN_DAYS) {
+    if (last && daysBetween(last.to, a.from) - 1 < breakMinDays()) {
       if (end > last.to) last.to = end;
       last.assignments.push(a);
     } else {
@@ -96,14 +97,19 @@ export function outlookOf(model: Model, employee: Employee, today: ISODate): Per
 
 /** Długo bez przerwy i wyjazd nie jest jeszcze zaplanowany (ciąg pracy nie kończy się w ciągu 3 tygodni). */
 export function needsBreak(o: PersonOutlook, today: ISODate): boolean {
-  if (o.stretchWeeks < LONG_STRETCH_WEEKS || !o.chain) return false;
+  if (o.stretchWeeks < longStretchWeeks() || !o.chain) return false;
   return o.chain.to > addDays(today, 21);
 }
 
 /** Zapotrzebowanie projektu w tygodniu: największe z faz, które nachodzą na dni robocze tygodnia. */
 export function needAt(project: Project, week: ISODate): { electricians: number; mechanics: number; defined: boolean } {
+  return needOf(project.demand ?? [], week);
+}
+
+/** Zapotrzebowanie z listy faz (np. jeszcze niezapisanych w edytorze projektu). */
+export function needOf(demand: DemandPhase[], week: ISODate): { electricians: number; mechanics: number; defined: boolean } {
   const friday = addDays(week, 4);
-  const phases = (project.demand ?? []).filter((d) => d.from <= friday && d.to >= week);
+  const phases = demand.filter((d) => d.from <= friday && d.to >= week);
   if (phases.length === 0) return { electricians: 0, mechanics: 0, defined: false };
   return {
     electricians: Math.max(...phases.map((d) => d.electricians)),
@@ -122,8 +128,13 @@ export interface WeekStaffing {
   needMechanical: number;
   /** Faza zapotrzebowania obejmuje ten tydzień */
   needDefined: boolean;
-  /** Ludzie projektu w tym tygodniu (do proporcji nasi / agencja) */
+  /** Ludzie projektu w tym tygodniu (do proporcji EPCIDO / agencja) */
   people: string[];
+  /** Z przypisanych: na zaakceptowanym urlopie (L4) przez większość tygodnia */
+  leaveElectrical: number;
+  leaveMechanical: number;
+  /** Z przypisanych: wniosek urlopowy czeka na akceptację */
+  pendingLeave: number;
   /** Brakuje osób względem zapotrzebowania (0 = obsadzony albo brak zapotrzebowania) */
   shortElectrical: number;
   shortMechanical: number;
@@ -142,6 +153,16 @@ export function weeklyStaffing(model: Model, project: Project, weeks: ISODate[])
     }
     const electrical = [...people.values()].filter((t) => t === "ELECTRICAL").length;
     const mechanical = [...people.values()].filter((t) => t === "MECHANICAL").length;
+    let leaveElectrical = 0;
+    let leaveMechanical = 0;
+    let pendingLeave = 0;
+    for (const [id, t] of people) {
+      const leave = leaveInWeek(model, id, week);
+      if (!leave) continue;
+      if (leave.status === "PENDING") pendingLeave++;
+      else if (t === "ELECTRICAL") leaveElectrical++;
+      else if (t === "MECHANICAL") leaveMechanical++;
+    }
     const need = needAt(project, week);
     return {
       week,
@@ -152,6 +173,9 @@ export function weeklyStaffing(model: Model, project: Project, weeks: ISODate[])
       needMechanical: need.mechanics,
       needDefined: need.defined,
       people: [...people.keys()],
+      leaveElectrical,
+      leaveMechanical,
+      pendingLeave,
       shortElectrical: Math.max(0, need.electricians - electrical),
       shortMechanical: Math.max(0, need.mechanics - mechanical),
     };
@@ -192,12 +216,39 @@ export function restartDate(lastDay: ISODate, breakDays: number): ISODate {
   return startOfWeek(free) === free ? free : addDays(startOfWeek(free), 7);
 }
 
-/** Proporcja „naszych" (UoP + B2B) wśród ludzi. Cel: co najmniej połowa. */
-export function oursShare(model: Model, employeeIds: string[]): { ours: number; agency: number; ok: boolean } {
-  const people = employeeIds.map((id) => model.employeeById.get(id)).filter((e): e is Employee => Boolean(e));
-  const ours = people.filter(isOurs).length;
-  const agency = people.length - ours;
-  return { ours, agency, ok: agency <= ours };
+/** Wniosek (zaakceptowany albo czekający), który zabiera osobie co najmniej 3 dni robocze tygodnia. */
+export function leaveInWeek(model: Model, employeeId: string, week: ISODate): LeaveRequest | undefined {
+  const friday = addDays(week, 4);
+  return model.leavesOf(employeeId).find((l) => {
+    if (l.status !== "APPROVED" && l.status !== "PENDING") return false;
+    if (l.from > friday || l.to < week) return false;
+    const a = l.from > week ? l.from : week;
+    const b = l.to < friday ? l.to : friday;
+    return daysBetween(a, b) + 1 >= 3;
+  });
+}
+
+/** Wnioski osoby (zaakceptowane i czekające) nachodzące na okres. */
+export function leavesBetween(model: Model, employeeId: string, from: ISODate, to: ISODate): LeaveRequest[] {
+  return model.leavesOf(employeeId).filter((l) => (l.status === "APPROVED" || l.status === "PENDING") && l.from <= to && l.to >= from);
+}
+
+export interface Share {
+  epcido: number;
+  agency: number;
+  /** Udział EPCIDO w procentach (100, gdy nikogo nie ma) */
+  pct: number;
+  /** Co najmniej minimalny udział z ustawień (domyślnie 50%) */
+  ok: boolean;
+}
+
+/** Udział EPCIDO (UoP + B2B) wśród ludzi. Cel z ustawień: domyślnie co najmniej połowa. */
+export function epcidoShare(model: Model, employeeIds: string[]): Share {
+  const people = [...new Set(employeeIds)].map((id) => model.employeeById.get(id)).filter((e): e is Employee => Boolean(e));
+  const epcido = people.filter(isEpcido).length;
+  const agency = people.length - epcido;
+  const pct = people.length ? Math.round((epcido / people.length) * 100) : 100;
+  return { epcido, agency, pct, ok: pct >= getSettings().minEpcidoShare };
 }
 
 /** Pierwszy dzień, od którego osoba jest wolna (dziś, jeśli bez zadania). */
@@ -222,12 +273,15 @@ export interface Candidate {
   /** Ile dni opóźnienia względem startu fazy (0 = od początku) */
   lateDays: number;
   experience: number;
-  ours: boolean;
+  epcido: boolean;
+  /** Urlop albo wniosek w czasie fazy */
+  leave: LeaveRequest | null;
 }
 
 /**
  * Kandydaci do fazy projektu: ta sama branża, wolni przed końcem fazy, bez kolizji.
- * Kolejność: kto może zacząć od początku fazy → doświadczenie w kategorii projektu → nasi przed agencją.
+ * Kolejność: kto może zacząć wcześniej (od startu fazy albo od dziś, gdy faza trwa; w tygodniach) → EPCIDO przed
+ * agencją (gdy agencji jest za dużo) → bez urlopu w fazie → doświadczenie w kategorii projektu.
  */
 export function candidatesFor(
   model: Model,
@@ -235,7 +289,7 @@ export function candidatesFor(
   phase: { from: ISODate; to: ISODate },
   trade: Trade,
   today: ISODate,
-  preferOurs: boolean
+  preferEpcido: boolean
 ): Candidate[] {
   const out: Candidate[] = [];
   for (const e of model.employees) {
@@ -261,15 +315,19 @@ export function candidatesFor(
       outlook: o,
       start,
       breakDays,
-      lateDays: Math.max(0, daysBetween(phase.from, start)),
+      // Opóźnienie liczone od startu fazy, a gdy faza już trwa — od dziś
+      lateDays: Math.max(0, daysBetween(phase.from < today ? today : phase.from, start)),
       experience: experienceIn(e, project.category),
-      ours: isOurs(e),
+      epcido: isEpcido(e),
+      leave: leavesBetween(model, e.id, start, phase.to)[0] ?? null,
     });
   }
+  // Kto wcześniej może zacząć (w tygodniach) → EPCIDO → bez urlopu → staż w kategorii
   return out.sort(
     (a, b) =>
-      Math.sign(a.lateDays) - Math.sign(b.lateDays) ||
-      (preferOurs ? Number(b.ours) - Number(a.ours) : 0) ||
+      Math.ceil(a.lateDays / 7) - Math.ceil(b.lateDays / 7) ||
+      (preferEpcido ? Number(b.epcido) - Number(a.epcido) : 0) ||
+      Number(Boolean(a.leave)) - Number(Boolean(b.leave)) ||
       b.experience - a.experience ||
       a.lateDays - b.lateDays
   );

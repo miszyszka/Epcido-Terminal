@@ -6,13 +6,14 @@ import type { AuditEvent } from "../domain/types";
 import type { ChangeSet, Repository, Snapshot } from "./repository";
 import { generateDataset, SEED_VERSION } from "./seed";
 
-const STORAGE_KEY = "epcido-demo-v5";
+const STORAGE_KEY = "epcido-demo-v6";
 
 type Store = {
   employees: Map<string, Record<string, unknown>>;
   projects: Map<string, Record<string, unknown>>;
   assignments: Map<string, Record<string, unknown>>;
   timesheets: Map<string, Record<string, unknown>>;
+  leaves: Map<string, Record<string, unknown>>;
   meta: Map<string, Record<string, unknown>>;
   audit: AuditEvent[];
 };
@@ -26,9 +27,11 @@ export function createMemoryRepository(): Repository {
     projects: values(store.projects),
     assignments: values(store.assignments),
     timesheets: values(store.timesheets),
+    leaves: values(store.leaves),
     audit: [...store.audit].sort((a, b) => b.at.localeCompare(a.at)),
     seeded: store.meta.has("seed"),
     seedVersion: store.meta.has("seed") ? Number(store.meta.get("seed")?.version ?? 1) : null,
+    settings: (store.meta.get("settings") as Snapshot["settings"]) ?? null,
   });
 
   const emit = () => {
@@ -65,6 +68,7 @@ function fresh(): Store {
     projects: toMap(data.projects),
     assignments: toMap(data.assignments),
     timesheets: toMap(data.timesheets),
+    leaves: toMap(data.leaves),
     meta: new Map([["seed", { version: SEED_VERSION }]]),
     audit: [],
   };
@@ -108,6 +112,7 @@ function load(): Store | null {
       projects: new Map(plain.projects),
       assignments: new Map(plain.assignments),
       timesheets: new Map(plain.timesheets),
+      leaves: new Map(plain.leaves ?? []),
       meta: new Map(plain.meta),
       audit: plain.audit ?? [],
     };

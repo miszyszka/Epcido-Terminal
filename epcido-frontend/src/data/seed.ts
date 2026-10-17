@@ -9,10 +9,16 @@
 //
 // Godziny: ostatnie 10 tygodni do dziś. Zamknięte tygodnie są wysłane do Dataverse (cały timesheet),
 // poza kilkoma wstrzymanymi timesheetami (brak zatwierdzenia albo brak wpisu) — czekają na administratora.
+//
+// Biuro: 3 osoby z HR (akceptują urlopy, widzą ludzi) i 1 użytkownik z własnymi uprawnieniami (controlling).
+// Urlopy: każda nieobecność w godzinach ma wniosek (zaakceptowany przez supervisora albo HR; L4 potwierdzone),
+// do tego zaakceptowane urlopy w kolejnych tygodniach, wnioski czekające na akceptację, jeden odrzucony
+// i trwające L4 bez potwierdzonego dokumentu.
 
 import { addDays, daysBetween, eachDay, formatMinutes, parseISO, startOfWeek, weekdayIndex, type ISODate } from "../lib/dates";
 import { createRandom } from "../lib/random";
-import { CATEGORIES, defaultTask, PROJECT_COLORS } from "../domain/labels";
+import { defaultTask, PROJECT_COLORS } from "../domain/labels";
+import { DEFAULT_SETTINGS } from "../domain/settings";
 import { exportAt, lockAt } from "../domain/workflow";
 import type {
   Assignment,
@@ -22,12 +28,14 @@ import type {
   Employee,
   Employment,
   Experience,
+  LeaveRequest,
   Project,
   ProjectCategory,
   Timesheet,
 } from "../domain/types";
 
-export const SEED_VERSION = 5;
+export const SEED_VERSION = 6;
+const CATEGORIES = DEFAULT_SETTINGS.categories;
 export const DEFAULT_USER_ID = "planner-1";
 
 interface SiteSpec {
@@ -86,7 +94,7 @@ export function generateDataset(today: ISODate, now: Date = new Date()): Dataset
   const experience = (agency: boolean): Experience => {
     const total = agency ? rnd.int(2, 40) : rnd.chance(0.25) ? rnd.int(4, 24) : rnd.int(18, 170);
     const main = rnd.pick(CATEGORIES);
-    const byCategory = { KNAPP: 0, KARDEX: 0, FORTNA: 0, OTHER: 0 } as Record<ProjectCategory, number>;
+    const byCategory = Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<ProjectCategory, number>;
     let left = total;
     byCategory[main] = Math.round(total * (0.4 + rnd.next() * 0.4));
     left -= byCategory[main];
@@ -125,7 +133,14 @@ export function generateDataset(today: ISODate, now: Date = new Date()): Dataset
   );
   const electricians = range(50).map((i) => person(`el-${i + 1}`, `Elektryk ${i + 1}`, "WORKER", "ELECTRICIAN", "ELECTRICAL"));
   const mechanics = range(50).map((i) => person(`me-${i + 1}`, `Mechanik ${i + 1}`, "WORKER", "MECHANIC", "MECHANICAL"));
-  const employees = [admin, planner, ...pms, ...ims, ...svs, ...tls, ...electricians, ...mechanics];
+  const hrs = range(3).map((i) => ({ ...person(`hr-${i + 1}`, `HR ${i + 1}`, "HR", "HR"), email: `hr${i + 1}@epcido.example` }));
+  // Użytkownik z własnym zestawem funkcji (dodany przez administratora): controlling — projekty, mapa, raporty
+  const controlling: Employee = {
+    ...person("ctrl-1", "Controlling 1", "CUSTOM", "OFFICE"),
+    email: "controlling@epcido.example",
+    grants: ["projects.all", "map.view", "people.view", "reports.export"],
+  };
+  const employees = [admin, planner, ...pms, ...ims, ...svs, ...hrs, controlling, ...tls, ...electricians, ...mechanics];
 
   // ---------- Projekty ----------
   const projects: Project[] = SITES.map((s, i) => {
@@ -274,6 +289,202 @@ export function generateDataset(today: ISODate, now: Date = new Date()): Dataset
     }
   }
 
+  // ---------- Urlopy i nieobecności ----------
+  const leaves: LeaveRequest[] = [];
+  const projectOn = (employeeId: string, date: ISODate): Project | null => {
+    const a = assignments.find((x) => x.employeeId === employeeId && x.from <= date && (!x.to || x.to >= date));
+    if (a) return projects.find((p) => p.id === a.projectId) ?? null;
+    return projects.find((p) => p.supervisorId === employeeId && p.startDate <= date && (p.endDate ?? "9999") >= date) ?? null;
+  };
+  const sheetOf = (projectId: string, date: ISODate) => {
+    const id = `${projectId}_${startOfWeek(date)}`;
+    const sheet = timesheets.get(id) ?? { id, projectId, weekStart: startOfWeek(date), days: {} };
+    timesheets.set(id, sheet);
+    return sheet;
+  };
+  const before = (iso: ISODate, days: number, hour: number) => at(addDays(iso, -days), hour);
+  let leaveNo = 0;
+  const newLeave = (l: Omit<LeaveRequest, "id" | "createdById" | "createdByName"> & { createdById?: string }): LeaveRequest => {
+    const by = l.createdById ?? l.employeeId;
+    const lv: LeaveRequest = { ...l, id: `lv-${++leaveNo}`, createdById: by, createdByName: nameOf(by) };
+    leaves.push(lv);
+    return lv;
+  };
+  /** Kto akceptuje: supervisor projektu albo HR (co trzeci wniosek). */
+  const deciderFor = (employeeId: string, date: ISODate) => {
+    const p = projectOn(employeeId, date);
+    return p?.supervisorId && p.supervisorId !== employeeId && rnd.chance(0.65) ? p.supervisorId : rnd.pick(hrs).id;
+  };
+
+  // a) Nieobecności już wpisane w godzinach → wnioski (kolejne dni robocze tego samego rodzaju)
+  type Run = { employeeId: string; type: "SICK" | "LEAVE" | "OTHER"; days: { sheet: Timesheet; date: ISODate }[] };
+  const runs: Run[] = [];
+  const absences: { sheet: Timesheet; employeeId: string; date: ISODate; type: "SICK" | "LEAVE" | "OTHER" }[] = [];
+  for (const sheet of timesheets.values())
+    for (const [employeeId, days] of Object.entries(sheet.days))
+      for (const [date, e] of Object.entries(days)) if (e.kind === "ABSENCE") absences.push({ sheet, employeeId, date, type: e.absence ?? "OTHER" });
+  absences.sort((a, b) => a.employeeId.localeCompare(b.employeeId) || a.date.localeCompare(b.date));
+  for (const a of absences) {
+    const last = runs[runs.length - 1];
+    const prevDay = last?.days[last.days.length - 1].date;
+    if (last && last.employeeId === a.employeeId && last.type === a.type && daysBetween(prevDay, a.date) <= 3) last.days.push({ sheet: a.sheet, date: a.date });
+    else runs.push({ employeeId: a.employeeId, type: a.type, days: [{ sheet: a.sheet, date: a.date }] });
+  }
+  for (const r of runs) {
+    const from = r.days[0].date;
+    const to = r.days[r.days.length - 1].date;
+    const sick = r.type === "SICK";
+    const decider = sick ? null : deciderFor(r.employeeId, from);
+    const decidedAt = sick ? null : before(from, rnd.int(3, 12), rnd.int(8, 16));
+    const confirmer = sick && daysBetween(to, today) > 2 ? rnd.pick(hrs).id : null;
+    const lv = newLeave({
+      employeeId: r.employeeId,
+      type: r.type,
+      from,
+      to,
+      note: sick ? null : rnd.chance(0.3) ? "Wyjazd rodzinny" : null,
+      status: "APPROVED",
+      createdAt: sick ? at(from, rnd.int(6, 9)) : before(from, rnd.int(14, 30), rnd.int(17, 21)),
+      decidedAt,
+      decidedById: decider,
+      decidedByName: decider ? nameOf(decider) : null,
+      confirmedAt: confirmer ? at(addDays(to, 2), rnd.int(9, 14)) : null,
+      confirmedById: confirmer,
+      confirmedByName: confirmer ? nameOf(confirmer) : null,
+    });
+    for (const d of r.days) {
+      const e = d.sheet.days[r.employeeId][d.date];
+      const by = decider ?? r.employeeId;
+      const when = decidedAt ?? lv.createdAt;
+      Object.assign(e, {
+        leaveId: lv.id,
+        status: "PM_APPROVED",
+        svApprovedBy: by,
+        svApprovedAt: when,
+        finalApprovedBy: by,
+        finalApprovedAt: when,
+      });
+    }
+  }
+
+  // b) Zaakceptowane urlopy w kolejnych tygodniach (widać je w planie zespołu i w Obsadzie)
+  const working = (id: string, from: ISODate, to: ISODate) => eachDay(from, to).every((d) => weekdayIndex(d) >= 5 || projectOn(id, d));
+  const fieldPeople = rnd.shuffle([...tls, ...electricians, ...mechanics]);
+  const used = new Set(leaves.filter((l) => l.to >= today).map((l) => l.employeeId));
+  const pickPeople = (n: number, from: ISODate, to: ISODate) => {
+    const out: Employee[] = [];
+    for (const e of fieldPeople) {
+      if (out.length >= n) break;
+      if (used.has(e.id) || !working(e.id, from, to)) continue;
+      used.add(e.id);
+      out.push(e);
+    }
+    return out;
+  };
+  for (const [weeksAhead, n] of [[1, 2], [2, 2], [3, 2], [5, 2], [7, 1]] as const) {
+    const from = addDays(currentWeek, weeksAhead * 7);
+    const to = addDays(from, 4);
+    for (const e of pickPeople(n, from, to)) {
+      const decider = deciderFor(e.id, from);
+      const decidedAt = before(today, rnd.int(1, 9), rnd.int(8, 16));
+      const lv = newLeave({
+        employeeId: e.id,
+        type: "LEAVE",
+        from,
+        to,
+        note: rnd.chance(0.4) ? rnd.pick(["Ślub w rodzinie", "Wyjazd z dziećmi", "Sprawy urzędowe w Polsce"]) : null,
+        status: "APPROVED",
+        createdAt: before(decidedAt.slice(0, 10), rnd.int(1, 6), rnd.int(17, 21)),
+        decidedAt,
+        decidedById: decider,
+        decidedByName: nameOf(decider),
+      });
+      for (const d of eachDay(from, to)) {
+        const p = projectOn(e.id, d);
+        if (!p) continue;
+        (sheetOf(p.id, d).days[e.id] ??= {})[d] = {
+          kind: "ABSENCE",
+          status: "PM_APPROVED",
+          absence: "LEAVE",
+          submittedAt: lv.createdAt,
+          svApprovedBy: decider,
+          svApprovedAt: decidedAt,
+          finalApprovedBy: decider,
+          finalApprovedAt: decidedAt,
+          leaveId: lv.id,
+          history: [{ at: decidedAt, byId: decider, byName: nameOf(decider), text: `Urlop — zaakceptował ${nameOf(decider)}` }],
+        };
+      }
+    }
+  }
+
+  // c) Wnioski czekające na akceptację — część w Projekcie 3 (Supervisor 3), reszta w różnych projektach
+  const p3 = projects[2];
+  const p3People = rnd.shuffle(assignments.filter((a) => a.projectId === p3.id).map((a) => employees.find((e) => e.id === a.employeeId)!));
+  const pendingPlan: { employee: Employee | undefined; weeksAhead: number; days: number; type: "LEAVE" | "OTHER" }[] = [
+    { employee: p3People.find((e) => !used.has(e.id) && working(e.id, addDays(currentWeek, 14), addDays(currentWeek, 18))), weeksAhead: 2, days: 5, type: "LEAVE" },
+    { employee: p3People.find((e) => !used.has(e.id) && e.position !== "TEAM_LEADER" && working(e.id, addDays(currentWeek, 28), addDays(currentWeek, 30))), weeksAhead: 4, days: 3, type: "OTHER" },
+  ];
+  for (const w of [1, 3, 3, 4, 6]) pendingPlan.push({ employee: pickPeople(1, addDays(currentWeek, w * 7), addDays(currentWeek, w * 7 + 4))[0], weeksAhead: w, days: 5, type: "LEAVE" });
+  for (const plan of pendingPlan) {
+    if (!plan.employee) continue;
+    used.add(plan.employee.id);
+    const from = addDays(currentWeek, plan.weeksAhead * 7);
+    newLeave({
+      employeeId: plan.employee.id,
+      type: plan.type,
+      from,
+      to: addDays(from, plan.days - 1),
+      note: plan.type === "OTHER" ? "Badania okresowe i szkolenie SEP w Polsce" : rnd.chance(0.5) ? rnd.pick(["Urlop wypoczynkowy", "Komunia syna", "Przeprowadzka"]) : null,
+      status: "PENDING",
+      createdAt: before(today, rnd.int(0, 4), rnd.int(7, 20)),
+    });
+  }
+
+  // d) Odrzucony wniosek
+  const rejectedFor = pickPeople(1, addDays(currentWeek, 21), addDays(currentWeek, 25))[0];
+  if (rejectedFor) {
+    const decider = deciderFor(rejectedFor.id, addDays(currentWeek, 21));
+    newLeave({
+      employeeId: rejectedFor.id,
+      type: "LEAVE",
+      from: addDays(currentWeek, 21),
+      to: addDays(currentWeek, 25),
+      note: null,
+      status: "REJECTED",
+      createdAt: before(today, 6, 19),
+      decidedAt: before(today, 5, 9),
+      decidedById: decider,
+      decidedByName: nameOf(decider),
+      decisionNote: "Odbiór u klienta w tym tygodniu — proszę o termin tydzień później.",
+    });
+  }
+
+  // e) Trwające L4 bez potwierdzonego dokumentu (od wczoraj do końca tygodnia)
+  // Trwa: zaczęło się wczoraj (w weekend — w piątek), kończy za kilka dni
+  const sickFrom = weekdayIndex(today) >= 1 && weekdayIndex(today) <= 4 ? addDays(today, -1) : addDays(currentWeek, 4);
+  const sickTo = addDays(sickFrom, 5);
+  const sickPerson = pickPeople(1, sickFrom, sickTo)[0];
+  if (sickPerson) {
+    const lv = newLeave({ employeeId: sickPerson.id, type: "SICK", from: sickFrom, to: sickTo, note: null, status: "APPROVED", createdAt: at(sickFrom, 7) });
+    for (const d of eachDay(sickFrom, sickTo)) {
+      const p = projectOn(sickPerson.id, d);
+      if (!p || weekdayIndex(d) >= 5) continue;
+      (sheetOf(p.id, d).days[sickPerson.id] ??= {})[d] = {
+        kind: "ABSENCE",
+        status: "PM_APPROVED",
+        absence: "SICK",
+        submittedAt: lv.createdAt,
+        svApprovedBy: sickPerson.id,
+        svApprovedAt: lv.createdAt,
+        finalApprovedBy: sickPerson.id,
+        finalApprovedAt: lv.createdAt,
+        leaveId: lv.id,
+        history: [{ at: lv.createdAt, byId: sickPerson.id, byName: sickPerson.name, text: "L4 — obowiązuje od zgłoszenia" }],
+      };
+    }
+  }
+
   // Wstrzymane timesheety: niezatwierdzone dni i brakujące wpisy, nic z timesheetu nie poszło do Dataverse
   for (const w of WITHHELD) {
     const p = projects[w.project];
@@ -281,11 +492,13 @@ export function generateDataset(today: ISODate, now: Date = new Date()): Dataset
     const sheet = timesheets.get(`${p.id}_${week}`);
     if (!sheet || now < lockAt(week)) continue;
     for (const days of Object.values(sheet.days)) for (const e of Object.values(days)) Object.assign(e, { exported: false, exportedAt: null });
-    const workers = Object.keys(sheet.days).filter((id) => id !== p.supervisorId);
-    const pickDay = (employeeId: string) => Object.keys(sheet.days[employeeId]).filter((d) => weekdayIndex(d) < 5);
+    const workers = Object.keys(sheet.days).filter((id) => id !== p.supervisorId && Object.values(sheet.days[id]).some((e) => e.kind === "WORK"));
+    const pickDay = (employeeId: string) =>
+      Object.keys(sheet.days[employeeId]).filter((d) => weekdayIndex(d) < 5 && sheet.days[employeeId][d].kind === "WORK");
     for (let k = 0; k < w.unapproved; k++) {
       const emp = rnd.pick(workers);
       const day = rnd.pick(pickDay(emp));
+      if (!day) continue;
       const e = sheet.days[emp][day];
       Object.assign(e, k % 2 === 0 ? { status: "SUBMITTED", svApprovedBy: null, svApprovedAt: null } : { status: "SUPERVISOR_APPROVED" }, {
         finalApprovedBy: null,
@@ -295,11 +508,11 @@ export function generateDataset(today: ISODate, now: Date = new Date()): Dataset
     for (let k = 0; k < w.missing; k++) {
       const emp = rnd.pick(workers);
       const day = rnd.pick(pickDay(emp));
-      delete sheet.days[emp][day];
+      if (day) delete sheet.days[emp][day];
     }
   }
 
-  return { employees, projects, assignments, timesheets: [...timesheets.values()] };
+  return { employees, projects, assignments, timesheets: [...timesheets.values()], leaves };
 
   function makeEntry(day: ISODate, wd: number, week: ISODate, weeksAgo: number, saturdays: boolean, personId: string): DayEntry | null {
     const isToday = day === today;
