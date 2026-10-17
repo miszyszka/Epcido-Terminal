@@ -10,7 +10,8 @@ import { Segmented } from "../../components/Segmented";
 import { BreakChoice, TimeStepper } from "../../components/TimeStepper";
 import { ABSENCE_LABEL, formatDuration } from "../../domain/labels";
 import type { AbsenceType, EntryKind } from "../../domain/types";
-import { approvalLevel, approvalNote, dayView, describeHours, editRight, statusText } from "../../domain/workflow";
+import { cellView, sheetsFor } from "../../domain/timesheets";
+import { approvalLevel, approvalNote, describeHours, editRight, statusText } from "../../domain/workflow";
 import { formatDay, formatTimestamp } from "../../lib/dates";
 
 /** Otwarty dzień z siatki (oś czasu, zatwierdzanie). Okno żyje w układzie aplikacji. */
@@ -34,7 +35,7 @@ function EntryDialog({ projectId, employeeId, date, onClose }: { projectId: stri
   const project = model.projectById.get(projectId);
   const employee = model.employeeById.get(employeeId);
   const right = editRight(model, user, projectId, employeeId, date, entry, now);
-  const view = dayView(entry, date, now);
+  const view = cellView(sheetsFor(model, now), projectId, employeeId, date, entry);
   // Nowy wpis od osoby zatwierdzającej: może go od razu zatwierdzić na swoim poziomie
   const level = useMemo(() => {
     if (!project || !right.asApprover) return null;
@@ -77,7 +78,7 @@ function EntryDialog({ projectId, employeeId, date, onClose }: { projectId: stri
     <span className={`badge badge--${view.state === "missed" ? "missed" : view.state === "pending" ? "pending" : view.state === "off" ? "neutral" : view.state === "absent" ? "absent" : "approved"}`}>
       {view.sent && <SentMark size={10} />}
       {view.state === "missed" && <MissedMark size={10} />}
-      {statusText(entry, date, now)}
+      {statusText(model, projectId, employeeId, date, entry, now)}
     </span>
   );
 
@@ -123,12 +124,12 @@ function EntryDialog({ projectId, employeeId, date, onClose }: { projectId: stri
       <div className="entry">
         <div className="entry__status">
           {statusBadge}
-          {entry && <p className="entry__note">{approvalNote(model, employeeId, date, entry, now)}</p>}
+          {entry && <p className="entry__note">{approvalNote(model, projectId, employeeId, date, entry, now)}</p>}
         </div>
 
         {!right.can ? (
           <>
-            <p className="entry__readonly">{describeHours(entry)}</p>
+            {(entry || !view.missing) && <p className="entry__readonly">{describeHours(entry)}</p>}
             {right.reason && (
               <p className="notice notice--quiet">
                 <Lock size={16} aria-hidden />

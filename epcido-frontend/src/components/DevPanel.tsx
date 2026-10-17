@@ -53,7 +53,7 @@ export function DevPanel() {
 
   const activeRow = current ? ROWS.find((r) => r.match(current)) : undefined;
   const seeded = model?.snapshot.seeded ?? false;
-  const outdated = Boolean(model && seeded && (model.snapshot.seedVersion ?? 1) < 4);
+  const outdated = Boolean(model && seeded && (model.snapshot.seedVersion ?? 1) < 5);
 
   return (
     <aside className="devpanel" aria-label="Panel roboczy">
@@ -82,13 +82,17 @@ export function DevPanel() {
                 <li key={row.key} className={`devrole ${isActive ? "is-active" : ""}`}>
                   <button type="button" className="devrole__switch" onClick={() => switchTo(selected)} aria-pressed={isActive}>
                     <PositionMark employee={selected} />
-                    <span className="devrole__label">{row.label}</span>
+                    <span className="devrole__text">
+                      <span className="devrole__label">{row.label}</span>
+                      <span className="devrole__person">{selected.name}</span>
+                    </span>
                     {isActive && <Check size={16} className="devrole__check" aria-label="aktywny" />}
                   </button>
                   {people.length > 1 && (
                     <SelectMenu
                       compact
-                      variant="quiet"
+                      variant="action"
+                      actionLabel="Zmień"
                       ariaLabel={`Wybierz osobę: ${row.label}`}
                       value={selected.id}
                       options={people.map((p) => ({ value: p.id, label: p.name }))}

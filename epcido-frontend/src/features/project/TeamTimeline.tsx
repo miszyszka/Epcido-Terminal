@@ -3,7 +3,7 @@ import { Scissors, Trash2, UserPlus, X } from "lucide-react";
 import { useModel } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { DatePicker } from "../../components/DatePicker";
-import { PositionMark } from "../../components/PersonBadge";
+import { EmploymentTag, PositionMark } from "../../components/PersonBadge";
 import type { DraftAssignment } from "../../data/commands";
 import { defaultTask, TASK_SUGGESTIONS } from "../../domain/labels";
 import type { Employee } from "../../domain/types";
@@ -312,6 +312,7 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
                     <div className="plan__name">
                       <PositionMark employee={employee} />
                       <span>{employee.name}</span>
+                      <EmploymentTag employee={employee} />
                       {bars.length > 1 && <em className="plan__count">{bars.length} zad.</em>}
                       {editable && (
                         <button

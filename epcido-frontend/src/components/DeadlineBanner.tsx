@@ -1,6 +1,7 @@
 import { AlarmClock, CheckCircle2 } from "lucide-react";
 import { formatRemaining, timesheetsGen, timesheetsNom, type DeadlineSummary } from "../domain/workflow";
 import { formatDay, toISO } from "../lib/dates";
+import { plural } from "../lib/text";
 import { MissedMark } from "./DayCell";
 
 /**
@@ -40,11 +41,11 @@ export function DeadlineBanner({ summary, isAdmin }: { summary: DeadlineSummary;
             </>
           )}
         </p>
-        {summary.missed > 0 && (
+        {isAdmin && summary.missed > 0 && (
           <p className="deadline-banner__missed">
             <MissedMark size={12} />
-            {timesheetsNom(summary.missed)} po terminie — nie wysłane do Dataverse.
-            {isAdmin ? " Zatwierdzić je możesz tylko Ty; pójdą w najbliższej wysyłce." : ""}
+            {timesheetsNom(summary.missed)} {plural(summary.missed, "wstrzymany", "wstrzymane", "wstrzymanych")} — nie poszły do Dataverse. Poprawić i zatwierdzić je możesz tylko Ty; pójdą w najbliższy
+            wtorek.
           </p>
         )}
       </div>

@@ -1,11 +1,10 @@
-// Zasady cyklu tygodnia (PLAN_I_ARCHITEKTURA.md, sekcja 5; ADR 0009):
-//  - tydzień = poniedziałek–niedziela,
-//  - godziny tygodnia trzeba zatwierdzić do poniedziałku następnego tygodnia, 23:59,
-//  - od wtorku 00:00 wszystko, czego nie zatwierdzono do końca (supervisor i Installation Manager),
-//    jest „nie wysłane do Dataverse": szare, zakreskowane, zatwierdza i zmienia je już tylko administrator,
-//  - we wtorek o 23:00 zatwierdzone godziny idą do Dataverse; to, co administrator zatwierdzi później,
-//    idzie w najbliższy wtorek.
-// Ścieżka zatwierdzania: pracownik/TL → Supervisor → Installation Manager.
+// Zasady cyklu tygodnia (PLAN_I_ARCHITEKTURA.md, sekcja 5; ADR 0009 i 0010):
+//  - tydzień = poniedziałek–niedziela; timesheet = projekt × tydzień (wszyscy ludzie projektu),
+//  - godziny tygodnia trzeba wpisać i zatwierdzić do poniedziałku następnego tygodnia, 23:59,
+//  - od wtorku 00:00 tydzień jest zamknięty: kompletny timesheet jest nienaruszalny i idzie do Dataverse
+//    we wtorek o 23:00; timesheet z błędami (brak zatwierdzenia, brak wpisu) jest wstrzymany w całości
+//    i poprawia go już tylko administrator — po poprawie idzie w najbliższy wtorek.
+// Ścieżka zatwierdzania: pracownik/TL → Supervisor → Installation Manager. Zatwierdza się osoby (wiersze) albo dni.
 // Pracownik zmienia swój dzień, dopóki nikt go nie zatwierdził. Osoby zatwierdzające zmieniają także
 // zatwierdzone dni — każda zmiana zostaje w notatce wpisu (kto, kiedy, co).
 
@@ -14,7 +13,8 @@ import { addDays, formatDay, formatMinutes, formatTimestamp, parseISO, startOfWe
 import { plural } from "../lib/text";
 import { ABSENCE_LABEL } from "./labels";
 import { can } from "./permissions";
-import type { DayEntry, DayState, Employee, EntryStatus, Project } from "./types";
+import { sheetKey, sheetsFor, WITHHELD_MESSAGE, type SheetInfo } from "./timesheets";
+import type { DayEntry, Employee, EntryStatus, Project } from "./types";
 
 export const EXPORT_HOUR = 23;
 
@@ -23,7 +23,7 @@ export function approveByDay(weekStart: ISODate): ISODate {
   return addDays(weekStart, 7);
 }
 
-/** Moment blokady tygodnia: wtorek 00:00 po terminie. */
+/** Moment zamknięcia tygodnia: wtorek 00:00 po terminie. */
 export function lockAt(weekStart: ISODate): Date {
   return parseISO(addDays(weekStart, 8));
 }
@@ -48,48 +48,9 @@ export function isFinal(entry: DayEntry | undefined): boolean {
   return Boolean(entry && (entry.exported || entry.status === "PM_APPROVED"));
 }
 
-/** Nie zatwierdzone do końca przed wtorkiem 00:00 — nie trafi do Dataverse, decyduje administrator. */
-export function isLocked(date: ISODate, entry: DayEntry | undefined, now: Date): boolean {
-  return Boolean(entry) && !isFinal(entry) && now >= lockAt(startOfWeek(date));
-}
-
-/** Kiedy wpis idzie (albo poszedł) do Dataverse. null = jeszcze nie zatwierdzony do końca. */
-export function sentAt(date: ISODate, entry: DayEntry | undefined): Date | null {
-  if (!entry) return null;
-  const week = startOfWeek(date);
-  if (entry.exported) return entry.exportedAt ? new Date(entry.exportedAt) : exportAt(week);
-  if (entry.status !== "PM_APPROVED") return null;
-  const regular = exportAt(week);
-  if (!entry.finalApprovedAt) return regular;
-  const late = nextExportAfter(new Date(entry.finalApprovedAt));
-  return late > regular ? late : regular;
-}
-
-export function isSent(date: ISODate, entry: DayEntry | undefined, now: Date): boolean {
-  if (!entry) return false;
-  if (entry.exported) return true;
-  const at = sentAt(date, entry);
-  return Boolean(at && now >= at);
-}
-
-/** Jak dzień wygląda na siatkach: kolor stanu i ptaszek wysyłki. */
-export function dayView(entry: DayEntry | undefined, date: ISODate, now: Date): { state: DayState; sent: boolean } {
-  if (!entry) return { state: "off", sent: false };
-  if (isSent(date, entry, now)) return { state: entry.kind === "ABSENCE" ? "absent" : "approved", sent: true };
-  if (isLocked(date, entry, now)) return { state: "missed", sent: false };
-  if (entry.kind === "ABSENCE") return { state: "absent", sent: false };
-  if (entry.status === "SUPERVISOR_APPROVED" || entry.status === "PM_APPROVED") return { state: "approved", sent: false };
-  return { state: "pending", sent: false };
-}
-
-/** Krótki stan słowami: do listy dni pracownika i nagłówka dnia. */
-export function statusText(entry: DayEntry | undefined, date: ISODate, now: Date): string {
-  if (!entry) return "Brak wpisu";
-  if (isSent(date, entry, now)) return "Wysłane do Dataverse";
-  if (isLocked(date, entry, now)) return "Nie wysłane do Dataverse";
-  if (entry.status === "PM_APPROVED") return "Zatwierdzone";
-  if (entry.status === "SUPERVISOR_APPROVED") return "Zatwierdzone przez supervisora";
-  return "Do zatwierdzenia";
+/** Tydzień zamknięty (od wtorku 00:00 po terminie). */
+export function isWeekClosed(date: ISODate, now: Date): boolean {
+  return now >= lockAt(startOfWeek(date));
 }
 
 /** Godziny słowami: „7:00–17:00, przerwa 30 min" albo „Nieobecny: urlop". */
@@ -100,25 +61,44 @@ export function describeHours(entry: DayEntry | undefined): string {
   return `${formatMinutes(entry.start)}–${formatMinutes(entry.end)}, przerwa ${entry.breakMin ?? 0} min`;
 }
 
-/**
- * Dymek dnia: kto i kiedy zatwierdził (i zmienił). Bez powtarzania tego, co widać na kafelku.
- */
-export function approvalNote(model: Model, employeeId: string, date: ISODate, entry: DayEntry | undefined, now: Date): string {
+/** Krótki stan słowami: do listy dni pracownika i nagłówka dnia. */
+export function statusText(model: Model, projectId: string | null, employeeId: string, date: ISODate, entry: DayEntry | undefined, now: Date): string {
+  const sheet = projectId ? sheetsFor(model, now).of(projectId, date) : null;
+  if (sheet?.status === "sent") return entry ? "Wysłane do Dataverse" : "Tydzień wysłany";
+  if (sheet?.status === "closed") return "Zamknięte, wysyłka we wtorek";
+  if (sheet?.status === "withheld") {
+    const problem = sheetsFor(model, now).problemAt(projectId!, employeeId, date);
+    if (problem) return problem.kind === "missing" ? "Brak wpisu — timesheet nie wysłany" : "Nie zatwierdzone — timesheet nie wysłany";
+    return "Timesheet nie wysłany";
+  }
   if (!entry) return "Brak wpisu";
-  const name = (id: string | null | undefined) => (id ? model.employeeById.get(id)?.name ?? id : "—");
+  if (entry.status === "PM_APPROVED") return "Zatwierdzone";
+  if (entry.status === "SUPERVISOR_APPROVED") return "Zatwierdzone przez supervisora";
+  return "Do zatwierdzenia";
+}
+
+/**
+ * Dymek dnia: kto i kiedy zatwierdził (i zmienił), czy timesheet poszedł do Dataverse.
+ * Bez powtarzania tego, co widać na kafelku.
+ */
+export function approvalNote(model: Model, projectId: string, employeeId: string, date: ISODate, entry: DayEntry | undefined, now: Date): string {
+  const sheets = sheetsFor(model, now);
+  const sheet = sheets.of(projectId, date);
   const lines: string[] = [];
+  if (sheet?.status === "withheld") {
+    const problem = sheets.problemAt(projectId, employeeId, date);
+    lines.push(problem ? (problem.kind === "missing" ? "Brak wpisu — timesheet nie został wysłany" : "Nie zatwierdzone na czas — timesheet nie został wysłany") : "Timesheet nie został wysłany (błędy u innych osób)");
+  }
+  if (!entry) return lines.join("\n") || "Brak wpisu";
+  const name = (id: string | null | undefined) => (id ? model.employeeById.get(id)?.name ?? id : "—");
   if (entry.svApprovedBy) lines.push(`Zatwierdzone przez ${name(entry.svApprovedBy)}${entry.svApprovedAt ? ` · ${formatTimestamp(entry.svApprovedAt)}` : ""}`);
   if (entry.finalApprovedBy && entry.finalApprovedBy !== entry.svApprovedBy)
     lines.push(`Zatwierdzone przez ${name(entry.finalApprovedBy)}${entry.finalApprovedAt ? ` · ${formatTimestamp(entry.finalApprovedAt)}` : ""}`);
   const changedByOthers = (entry.history ?? []).filter((h) => h.byId !== employeeId);
   const last = changedByOthers[changedByOthers.length - 1];
   if (last) lines.push(`Zmienione przez ${last.byName} · ${formatTimestamp(last.at)}`);
-  if (isSent(date, entry, now)) {
-    const at = sentAt(date, entry);
-    lines.push(`Wysłane do Dataverse${at ? ` · ${formatTimestamp(at.toISOString())}` : ""}`);
-  } else if (isLocked(date, entry, now)) {
-    lines.unshift(`Nie wysłane do Dataverse — nie zatwierdzone do ${formatDay(approveByDay(startOfWeek(date)))}, 23:59`);
-  }
+  if (sheet?.status === "sent" && sheet.sentAt) lines.push(`Wysłane do Dataverse · ${formatTimestamp(sheet.sentAt.toISOString())}`);
+  if (sheet?.status === "closed" && sheet.sentAt) lines.push(`Zamknięte · wysyłka ${formatTimestamp(sheet.sentAt.toISOString())}`);
   if (lines.length === 0) lines.push(`Do zatwierdzenia${entry.submittedAt ? ` · wpisane ${formatTimestamp(entry.submittedAt)}` : ""}`);
   return lines.join("\n");
 }
@@ -156,11 +136,11 @@ export interface QueueItem {
   week: ISODate;
   entry: DayEntry;
   level: QueueLevel;
-  /** Po terminie — widzi i zatwierdza tylko administrator */
+  /** Tydzień zamknięty — wstrzymany timesheet, zatwierdza tylko administrator */
   locked: boolean;
 }
 
-/** Co dana osoba ma do zatwierdzenia. Po terminie: tylko administrator. */
+/** Co dana osoba ma do zatwierdzenia. W zamkniętych tygodniach: tylko administrator. */
 export function queueFor(model: Model, user: Employee, now: Date): QueueItem[] {
   const items: QueueItem[] = [];
   const isAdmin = user.role === "ADMIN";
@@ -170,7 +150,7 @@ export function queueFor(model: Model, user: Employee, now: Date): QueueItem[] {
       for (const [date, entry] of days) {
         const level = approvalLevel(project, user, employeeId, entry);
         if (!level) continue;
-        const locked = isLocked(date, entry, now);
+        const locked = isWeekClosed(date, now);
         if (locked && !isAdmin) continue;
         items.push({
           key: `${project.id}|${employeeId}|${date}`,
@@ -188,26 +168,17 @@ export function queueFor(model: Model, user: Employee, now: Date): QueueItem[] {
   return items.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** Timesheety w projektach osoby (SV, IM), których nikt nie zatwierdził na czas — nie poszły do Dataverse. */
-export function missedInScope(model: Model, user: Employee, now: Date): number {
-  const refs: { projectId: string; employeeId: string; date: ISODate }[] = [];
-  for (const project of model.projects) {
-    if (project.supervisorId !== user.id && project.installationManagerId !== user.id) continue;
-    for (const [employeeId, days] of model.entries.get(project.id) ?? []) {
-      if (employeeId === user.id) continue;
-      for (const [date, entry] of days) if (isLocked(date, entry, now)) refs.push({ projectId: project.id, employeeId, date });
-    }
-  }
-  return countTimesheets(refs);
+/** Liczba timesheetów (projekt × tydzień) wśród pozycji. */
+export function countTimesheets(items: { projectId: string; date: ISODate }[]): number {
+  return new Set(items.map((i) => sheetKey(i.projectId, startOfWeek(i.date)))).size;
 }
 
-/** Timesheet = tydzień jednej osoby w jednym projekcie. */
-export function timesheetKey(projectId: string, employeeId: string, week: ISODate) {
-  return `${projectId}|${employeeId}|${week}`;
-}
-
-export function countTimesheets(items: { projectId: string; employeeId: string; date: ISODate }[]): number {
-  return new Set(items.map((i) => timesheetKey(i.projectId, i.employeeId, startOfWeek(i.date)))).size;
+/** Wstrzymane timesheety w projektach osoby (SV, IM; administrator — wszystkie). */
+export function withheldInScope(model: Model, user: Employee, now: Date): SheetInfo[] {
+  const ids = model.projects
+    .filter((p) => user.role === "ADMIN" || p.supervisorId === user.id || p.installationManagerId === user.id)
+    .map((p) => p.id);
+  return sheetsFor(model, now).withheld(ids);
 }
 
 /** Tydzień, którego termin jest teraz najbliższy: poprzedni do poniedziałku 23:59, potem bieżący. */
@@ -224,19 +195,19 @@ export interface DeadlineSummary {
   approveBy: ISODate;
   lockAt: Date;
   exportAt: Date;
-  /** Timesheety do zatwierdzenia w tym terminie */
+  /** Timesheety (projekt × tydzień) do zatwierdzenia w tym terminie */
   timesheets: number;
-  /** Timesheety z późniejszym terminem (bieżący tydzień, gdy zamykamy poprzedni) */
+  /** Timesheety z późniejszym terminem */
   later: number;
   laterApproveBy: ISODate | null;
-  /** Po terminie — tylko administrator */
+  /** Wstrzymane timesheety (nie wysłane) */
   missed: number;
   remainingMs: number;
   /** Zostały już tylko godziny (mniej niż doba) */
   urgent: boolean;
 }
 
-export function deadlineSummary(items: QueueItem[], now: Date): DeadlineSummary {
+export function deadlineSummary(items: QueueItem[], now: Date, withheld = 0): DeadlineSummary {
   const open = items.filter((i) => !i.locked);
   const weeks = [...new Set(open.map((i) => i.week))].sort();
   const week = weeks[0] ?? closingWeek(now).week;
@@ -252,7 +223,7 @@ export function deadlineSummary(items: QueueItem[], now: Date): DeadlineSummary 
     timesheets: countTimesheets(due),
     later: countTimesheets(later),
     laterApproveBy: weeks[1] ? approveByDay(weeks[1]) : null,
-    missed: countTimesheets(items.filter((i) => i.locked)),
+    missed: withheld,
     remainingMs,
     urgent: remainingMs < 86_400_000,
   };
@@ -279,11 +250,11 @@ export const timesheetsNom = (n: number) => `${n} ${plural(n, "timesheet", "time
 export interface SupervisorStats {
   supervisor: Employee;
   projectIds: string[];
-  /** Timesheety zespołu czekające na supervisora (przed terminem) */
+  /** Timesheety, w których supervisor ma coś do zatwierdzenia (przed terminem) */
   pending: number;
-  /** Timesheety zespołu nie zatwierdzone na czas — nie wysłane do Dataverse */
+  /** Wstrzymane timesheety w projektach supervisora — nie wysłane do Dataverse */
   missed: number;
-  /** Zatwierdzone przez supervisora i godziny samego supervisora — czekają na Installation Managera */
+  /** Timesheety z dniami zatwierdzonymi przez supervisora (i jego własnymi), które czekają na IM */
   awaitingFinal: number;
   /** Bieżący tydzień: wpisy zespołu i ile z nich zatwierdzono */
   weekTotal: number;
@@ -294,8 +265,7 @@ export function supervisorStats(model: Model, supervisor: Employee, now: Date): 
   const projects = model.projects.filter((p) => p.supervisorId === supervisor.id);
   const today = toISO(now);
   const weekStart = startOfWeek(today);
-  const pending: { projectId: string; employeeId: string; date: ISODate }[] = [];
-  const missed: typeof pending = [];
+  const pending: { projectId: string; date: ISODate }[] = [];
   const awaiting: typeof pending = [];
   let weekTotal = 0;
   let weekApproved = 0;
@@ -303,21 +273,19 @@ export function supervisorStats(model: Model, supervisor: Employee, now: Date): 
     for (const [employeeId, days] of model.entries.get(p.id) ?? []) {
       const own = employeeId === supervisor.id;
       for (const [date, entry] of days) {
+        const inWeek = !own && date >= weekStart && date <= today;
         if (isFinal(entry)) {
-          if (!own && date >= weekStart && date <= today) {
+          if (inWeek) {
             weekTotal++;
             weekApproved++;
           }
           continue;
         }
-        const ref = { projectId: p.id, employeeId, date };
-        if (isLocked(date, entry, now)) {
-          if (!own) missed.push(ref);
-          continue;
-        }
+        if (isWeekClosed(date, now)) continue;
+        const ref = { projectId: p.id, date };
         if (!own && entry.status === "SUBMITTED") pending.push(ref);
         if (entry.status === "SUPERVISOR_APPROVED" || (own && entry.status === "SUBMITTED")) awaiting.push(ref);
-        if (!own && date >= weekStart && date <= today) {
+        if (inWeek) {
           weekTotal++;
           if (entry.status === "SUPERVISOR_APPROVED") weekApproved++;
         }
@@ -328,7 +296,7 @@ export function supervisorStats(model: Model, supervisor: Employee, now: Date): 
     supervisor,
     projectIds: projects.map((p) => p.id),
     pending: countTimesheets(pending),
-    missed: countTimesheets(missed),
+    missed: sheetsFor(model, now).withheld(projects.map((p) => p.id)).length,
     awaitingFinal: countTimesheets(awaiting),
     weekTotal,
     weekApproved,
@@ -349,7 +317,11 @@ export interface EditRight {
 
 const NO = (reason: string | null): EditRight => ({ can: false, reason, asApprover: false, level: null });
 
-/** Kto może zmienić dzień: pracownik do zatwierdzenia; SV, IM i administrator także po zatwierdzeniu. */
+/**
+ * Kto może zmienić dzień:
+ *  - tydzień otwarty: pracownik do zatwierdzenia; SV, IM i administrator także po zatwierdzeniu,
+ *  - tydzień zamknięty: kompletny timesheet jest nienaruszalny; wstrzymany poprawia tylko administrator.
+ */
 export function editRight(
   model: Model,
   user: Employee,
@@ -362,14 +334,17 @@ export function editRight(
   const project = model.projectById.get(projectId);
   if (!project) return NO(null);
   if (date > toISO(now)) return NO("Ten dzień jeszcze nie minął.");
-  if (isSent(date, entry, now)) return NO("Wysłane do Dataverse — tego dnia nie można już zmienić.");
   const isAdmin = user.role === "ADMIN";
   const level = approvalLevel(project, user, employeeId, entry);
-  if (isLocked(date, entry, now)) {
-    return isAdmin
-      ? { can: true, reason: null, asApprover: true, level: level ?? "final" }
-      : NO("Nie zatwierdzone do poniedziałku 23:59 — nie wysłane do Dataverse. Zmienić i zatwierdzić może tylko administrator.");
+
+  if (isWeekClosed(date, now)) {
+    const sheet = sheetsFor(model, now).of(projectId, date);
+    if (sheet?.status === "sent") return NO("Timesheet wysłany do Dataverse — nienaruszalny.");
+    if (sheet?.status === "closed") return NO(`Timesheet zamknięty i kompletny — wysyłka ${formatDay(toISO(sheet.sentAt!))}, 23:00.`);
+    if (isAdmin) return { can: true, reason: null, asApprover: true, level: level ?? "final" };
+    return NO(WITHHELD_MESSAGE);
   }
+
   const isSv = project.supervisorId === user.id && employeeId !== user.id;
   const isIm = project.installationManagerId === user.id;
   if (isAdmin || isSv || isIm) return { can: true, reason: null, asApprover: true, level };

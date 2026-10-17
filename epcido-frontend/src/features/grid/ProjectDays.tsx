@@ -4,7 +4,8 @@ import { useUi } from "../../app/UiContext";
 import { DayCard, DayCell } from "../../components/DayCell";
 import { PositionMark } from "../../components/PersonBadge";
 import type { Project } from "../../domain/types";
-import { approvalNote, dayView, describeHours, editRight } from "../../domain/workflow";
+import { cellView, sheetsFor } from "../../domain/timesheets";
+import { approvalNote, describeHours, editRight } from "../../domain/workflow";
 import { formatDay, isWeekend, MONTHS_LONG, parseISO, weekdayIndex, WEEKDAYS_SHORT, type ISODate } from "../../lib/dates";
 
 interface ProjectDaysProps {
@@ -29,6 +30,7 @@ export function ProjectDays({ project, rows, days, today, variant, hideHead }: P
   const now = useNow();
   const { openEntry } = useUi();
   const detailed = variant === "detailed";
+  const sheets = sheetsFor(model, now);
 
   return (
     <table
@@ -65,30 +67,33 @@ export function ProjectDays({ project, rows, days, today, variant, hideHead }: P
                   return <td key={d} className={`${cls} ${onBreak ? "is-break" : "is-outside"}`} data-tip={onBreak ? "Przerwa — bez zadania" : undefined} />;
                 }
                 const future = d > today;
-                const v = dayView(entry, d, now);
+                const v = cellView(sheets, project.id, employee.id, d, entry);
                 const planned = future && inPeriod && !isWeekend(d);
                 if (!detailed) {
+                  const note = approvalNote(model, project.id, employee.id, d, entry, now);
                   const label = `${employee.name}, ${formatDay(d)}\n${
-                    planned && !entry ? "Zaplanowany dzień pracy" : entry ? `${describeHours(entry)}\n${approvalNote(model, employee.id, d, entry, now)}` : "Brak wpisu"
+                    planned && !entry ? "Zaplanowany dzień pracy" : entry ? `${describeHours(entry)}\n${note}` : note
                   }`;
                   return (
                     <td key={d} className={cls}>
-                      <DayCell state={v.state} sent={v.sent} planned={planned} today={d === today} label={label} />
+                      <DayCell state={v.state} sent={v.sent} closed={v.closed} planned={planned} today={d === today} label={label} />
                     </td>
                   );
                 }
                 const right = editRight(model, user, project.id, employee.id, d, entry, now);
-                const clickable = (entry && (right.can || right.reason)) || (!entry && right.can && right.asApprover);
+                const clickable = (entry && (right.can || right.reason)) || (!entry && right.can && right.asApprover) || v.missing;
                 return (
                   <td key={d} className={cls}>
                     <DayCard
                       entry={entry}
                       state={v.state}
                       sent={v.sent}
+                      closed={v.closed}
+                      missing={v.missing}
                       planned={planned}
                       expected={!future && !isWeekend(d)}
                       onClick={clickable ? () => openEntry({ projectId: project.id, employeeId: employee.id, date: d }) : undefined}
-                      tip={entry ? approvalNote(model, employee.id, d, entry, now) : undefined}
+                      tip={entry || v.missing ? approvalNote(model, project.id, employee.id, d, entry, now) : undefined}
                       label={`${employee.name}, ${formatDay(d)}: ${describeHours(entry)}`}
                     />
                   </td>

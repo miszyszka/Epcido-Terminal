@@ -1,12 +1,14 @@
 import { useMemo } from "react";
-import { TriangleAlert } from "lucide-react";
+import { Plus, TriangleAlert, X } from "lucide-react";
 import { useModel } from "../../app/DataContext";
 import { DatePicker } from "../../components/DatePicker";
 import { Field, TextInput } from "../../components/Field";
 import { SelectMenu } from "../../components/SelectMenu";
-import { BRANCHES, PROJECT_COLORS, PROJECT_STATUS_LABEL } from "../../domain/labels";
-import type { Project, ProjectInput, ProjectStatus } from "../../domain/types";
-import { todayISO } from "../../lib/dates";
+import { Segmented } from "../../components/Segmented";
+import { BRANCHES, CATEGORIES, CATEGORY_LABEL, PROJECT_COLORS, PROJECT_STATUS_LABEL } from "../../domain/labels";
+import type { DemandPhase, Project, ProjectCategory, ProjectInput, ProjectStatus } from "../../domain/types";
+import { addDays, todayISO } from "../../lib/dates";
+import { newId } from "../../lib/random";
 
 interface ProjectFormProps {
   values: ProjectInput;
@@ -44,16 +46,16 @@ export function emptyProjectInput(projects: Project[], pmId: string | null): Pro
     projectManagerId: pmId,
     installationManagerId: null,
     supervisorId: null,
-    needElectricians: null,
-    needMechanics: null,
+    category: "KNAPP",
+    demand: [],
     dataverseId: "",
     dataverseNumber: "",
   };
 }
 
-function toCount(text: string): number | null {
+function toCount(text: string): number {
   const digits = text.replace(/\D/g, "");
-  return digits ? Math.min(500, Number.parseInt(digits, 10)) : null;
+  return digits ? Math.min(500, Number.parseInt(digits, 10)) : 0;
 }
 
 /** Dane projektu — te same pola przy tworzeniu i edycji. Sekcje jak w Gantbee, bez zbędnych pól. */
@@ -63,6 +65,14 @@ export function ProjectForm({ values, onChange: set, errors, projectId, readOnly
   const ims = model.employees.filter((e) => e.position === "INSTALLATION_MANAGER");
   const svs = model.employees.filter((e) => e.position === "SUPERVISOR");
   const customers = useMemo(() => [...new Set(model.projects.map((p) => p.customerName))].sort(), [model.projects]);
+  const setDemand = (demand: DemandPhase[]) => set("demand", demand);
+  const patchPhase = (id: string, patch: Partial<DemandPhase>) => setDemand(values.demand.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  const addPhase = () => {
+    const last = values.demand[values.demand.length - 1];
+    const from = last ? addDays(last.to, 1) : values.startDate || todayISO();
+    const to = values.endDate && values.endDate > from ? values.endDate : addDays(from, 55);
+    setDemand([...values.demand, { id: newId("d"), from, to, electricians: last?.electricians ?? 0, mechanics: last?.mechanics ?? 0 }]);
+  };
 
   return (
     <fieldset className="form" disabled={readOnly}>
@@ -84,6 +94,14 @@ export function ProjectForm({ values, onChange: set, errors, projectId, readOnly
         </div>
         <Field label="Nazwa projektu" htmlFor="f-name" error={errors.name} hint="Np. P26011-Klient-Miasto">
           <TextInput id="f-name" value={values.name} onChange={(e) => set("name", e.target.value)} invalid={!!errors.name} />
+        </Field>
+        <Field label="Kategoria" htmlFor="f-category" error={errors.category}>
+          <Segmented<ProjectCategory>
+            label="Kategoria projektu"
+            value={values.category}
+            onChange={(v) => set("category", v)}
+            options={CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))}
+          />
         </Field>
       </section>
 
@@ -139,29 +157,43 @@ export function ProjectForm({ values, onChange: set, errors, projectId, readOnly
 
       <section className="form-section">
         <h3 className="form-section__title">Zapotrzebowanie</h3>
-        <p className="form-section__lead">Ilu ludzi potrzeba w projekcie (razem z Team Leaderami). Planning widzi braki w Obsadzie.</p>
-        <div className="form-grid">
-          <Field label="Elektrycy" htmlFor="f-need-el" error={errors.needElectricians} optional>
-            <TextInput
-              id="f-need-el"
-              inputMode="numeric"
-              value={values.needElectricians ?? ""}
-              onChange={(e) => set("needElectricians", toCount(e.target.value))}
-              invalid={!!errors.needElectricians}
-              placeholder="np. 8"
-            />
-          </Field>
-          <Field label="Mechanicy" htmlFor="f-need-me" error={errors.needMechanics} optional>
-            <TextInput
-              id="f-need-me"
-              inputMode="numeric"
-              value={values.needMechanics ?? ""}
-              onChange={(e) => set("needMechanics", toCount(e.target.value))}
-              invalid={!!errors.needMechanics}
-              placeholder="np. 6"
-            />
-          </Field>
-        </div>
+        <p className="form-section__lead">
+          Ile osób potrzeba w jakim czasie (razem z Team Leaderami danej branży). Planning widzi to w Obsadzie i dobiera ludzi.
+        </p>
+        {values.demand.length === 0 && <p className="phase-empty">Brak faz — dodaj pierwszą, żeby Planning wiedział, kogo szukać.</p>}
+        {values.demand.map((d, i) => (
+          <div key={d.id} className="phase">
+            <div className="phase__head">
+              <strong>Faza {i + 1}</strong>
+              {!readOnly && (
+                <button type="button" className="icon-btn icon-btn--sm" onClick={() => setDemand(values.demand.filter((x) => x.id !== d.id))} aria-label={`Usuń fazę ${i + 1}`}>
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <div className="form-grid">
+              <Field label="Od" htmlFor={`f-ph-from-${i}`}>
+                <DatePicker id={`f-ph-from-${i}`} value={d.from} onChange={(v) => v && patchPhase(d.id, { from: v })} />
+              </Field>
+              <Field label="Do" htmlFor={`f-ph-to-${i}`}>
+                <DatePicker id={`f-ph-to-${i}`} value={d.to} onChange={(v) => v && patchPhase(d.id, { to: v })} min={d.from} rangeStart={d.from} />
+              </Field>
+              <Field label="Elektrycy" htmlFor={`f-ph-el-${i}`}>
+                <TextInput id={`f-ph-el-${i}`} inputMode="numeric" value={d.electricians} onChange={(e) => patchPhase(d.id, { electricians: toCount(e.target.value) })} />
+              </Field>
+              <Field label="Mechanicy" htmlFor={`f-ph-me-${i}`}>
+                <TextInput id={`f-ph-me-${i}`} inputMode="numeric" value={d.mechanics} onChange={(e) => patchPhase(d.id, { mechanics: toCount(e.target.value) })} />
+              </Field>
+            </div>
+          </div>
+        ))}
+        {errors.demand && <p className="field__error">{errors.demand}</p>}
+        {!readOnly && (
+          <button type="button" className="btn btn--secondary btn--sm phase-add" onClick={addPhase}>
+            <Plus size={16} aria-hidden />
+            Dodaj fazę
+          </button>
+        )}
       </section>
 
       <section className="form-section">

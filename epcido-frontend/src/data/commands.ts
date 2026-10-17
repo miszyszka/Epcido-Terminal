@@ -4,7 +4,7 @@
 import { newId } from "../lib/random";
 import { addDays, eachDay, formatDate, formatDay, startOfWeek, weekdayIndex, type ISODate } from "../lib/dates";
 import { ABSENCE_LABEL, defaultTask, PROJECT_STATUS_LABEL } from "../domain/labels";
-import { approvedStatus, countTimesheets, describeHours, isLocked, type QueueItem, type QueueLevel } from "../domain/workflow";
+import { approvedStatus, countTimesheets, describeHours, isWeekClosed, type QueueItem, type QueueLevel } from "../domain/workflow";
 import type {
   AbsenceType,
   Assignment,
@@ -71,8 +71,8 @@ const FIELD_LABELS: Partial<Record<keyof ProjectInput, string>> = {
   projectManagerId: "Project Manager",
   installationManagerId: "Installation Manager",
   supervisorId: "Supervisor",
-  needElectricians: "Zapotrzebowanie: elektrycy",
-  needMechanics: "Zapotrzebowanie: mechanicy",
+  category: "Kategoria",
+  demand: "Zapotrzebowanie",
   dataverseId: "Dataverse Id",
   dataverseNumber: "Dataverse Number",
 };
@@ -90,9 +90,11 @@ export function validateProject(input: ProjectInput, snapshot: Snapshot, editing
   if (input.endDate && input.startDate && input.endDate < input.startDate) errors.endDate = "Koniec nie może być przed startem.";
   if (!input.installationManagerId) errors.installationManagerId = "Wybierz Installation Managera.";
   if (!input.branch) errors.branch = "Wybierz oddział.";
-  for (const key of ["needElectricians", "needMechanics"] as const) {
-    const v = input[key];
-    if (v != null && (!Number.isInteger(v) || v < 0 || v > 500)) errors[key] = "Podaj liczbę osób od 0 do 500.";
+  if (!input.category) errors.category = "Wybierz kategorię projektu.";
+  for (const d of input.demand ?? []) {
+    if (!d.from || !d.to || d.to < d.from) errors.demand = "Każda faza zapotrzebowania musi mieć daty od–do.";
+    else if ([d.electricians, d.mechanics].some((n) => !Number.isInteger(n) || n < 0 || n > 500))
+      errors.demand = "Podaj liczbę osób od 0 do 500.";
   }
   return errors;
 }
@@ -152,7 +154,7 @@ export function saveProject(
     events.push(audit(actor, "PROJECT_CREATED", id, `Utworzono projekt ${next.name} (${next.number})`));
   } else {
     const changes = (Object.keys(FIELD_LABELS) as (keyof ProjectInput)[])
-      .filter((key) => (current[key] ?? "") !== (next[key] ?? ""))
+      .filter((key) => JSON.stringify(current[key] ?? "") !== JSON.stringify(next[key] ?? ""))
       .map((key) => ({
         field: FIELD_LABELS[key]!,
         before: describeValue(snapshot, key, current[key]),
@@ -230,7 +232,7 @@ export function assignToProject(snapshot: Snapshot, actor: Actor, employeeId: st
 export function planAssignment(
   snapshot: Snapshot,
   actor: Actor,
-  args: { employeeId: string; projectId: string; from: ISODate; to: ISODate | null; task: string; breakDays?: number }
+  args: { id?: string; employeeId: string; projectId: string; from: ISODate; to: ISODate | null; task: string; breakDays?: number }
 ): ChangeSet {
   const project = snapshot.projects.find((p) => p.id === args.projectId);
   const employee = snapshot.employees.find((e) => e.id === args.employeeId);
@@ -247,7 +249,14 @@ export function planAssignment(
     const p = snapshot.projects.find((x) => x.id === clash.projectId);
     throw new CommandError(`${employee.name} ma już zadanie w ${p?.name ?? "innym projekcie"} w tym czasie.`);
   }
-  const a: Assignment = { id: newId("a"), projectId: project.id, employeeId: employee.id, from: args.from, to, task: args.task.trim() || defaultTask(employee.trade) };
+  const a: Assignment = {
+    id: args.id ?? newId("a"),
+    projectId: project.id,
+    employeeId: employee.id,
+    from: args.from,
+    to,
+    task: args.task.trim() || defaultTask(employee.trade),
+  };
   const pause = args.breakDays ? `, wcześniej przerwa ${daysCount(args.breakDays)}` : "";
   return {
     writes: [{ collection: "assignments", id: a.id, data: strip(a) }],
@@ -257,6 +266,27 @@ export function planAssignment(
         "MEMBER_ASSIGNED",
         project.id,
         `Zaplanowano ${employee.name} w ${project.name}: ${a.task}, ${formatDate(a.from)} – ${to ? formatDate(to) : "koniec projektu"}${pause}`
+      ),
+    ],
+  };
+}
+
+/** Obsada: cofnięcie zaplanowanego zadania (albo usunięcie osoby z przyszłej fazy projektu). */
+export function removeAssignment(snapshot: Snapshot, actor: Actor, args: { assignmentId: string; reason?: string }): ChangeSet {
+  const a = snapshot.assignments.find((x) => x.id === args.assignmentId);
+  if (!a) throw new CommandError("Tego zadania już nie ma.");
+  const project = snapshot.projects.find((p) => p.id === a.projectId);
+  const employee = snapshot.employees.find((e) => e.id === a.employeeId);
+  const hasHours = snapshot.timesheets.some((t) => t.projectId === a.projectId && Object.keys(t.days?.[a.employeeId] ?? {}).some((d) => d >= a.from && (!a.to || d <= a.to)));
+  if (hasHours) throw new CommandError(`${employee?.name ?? "Ta osoba"} ma już wpisane godziny w tym zadaniu — skróć zadanie w planie zespołu.`);
+  return {
+    writes: [{ collection: "assignments", id: a.id, data: null }],
+    audit: [
+      audit(
+        actor,
+        "MEMBER_REMOVED",
+        a.projectId,
+        `${args.reason ?? "Usunięto z planu"}: ${employee?.name ?? a.employeeId} w ${project?.name ?? a.projectId}, ${formatDate(a.from)} – ${a.to ? formatDate(a.to) : "koniec projektu"}`
       ),
     ],
   };
@@ -344,6 +374,19 @@ function change(actor: Actor, text: string): EntryChange {
   return { at: new Date().toISOString(), byId: actor.id, byName: actor.name, text };
 }
 
+/**
+ * Zamknięty tydzień: wysłany timesheet jest nienaruszalny dla wszystkich, wstrzymany poprawia tylko administrator.
+ * (W wersji produkcyjnej to samo sprawdza backend — tu ostatnia linia obrony w prototypie.)
+ */
+function closedCheck(snapshot: Snapshot, actor: Actor, projectId: string, date: ISODate) {
+  if (!isWeekClosed(date, new Date())) return;
+  const sheet = snapshot.timesheets.find((t) => t.id === sheetId(projectId, date));
+  const sent = Object.values(sheet?.days ?? {}).some((days) => Object.values(days ?? {}).some((e) => e?.exported));
+  if (sent) throw new CommandError("Timesheet jest już w Dataverse — nienaruszalny.");
+  const role = snapshot.employees.find((e) => e.id === actor.id)?.role;
+  if (role !== "ADMIN") throw new CommandError("Czas minął — timesheet poprawia już tylko administrator.");
+}
+
 function currentEntry(snapshot: Snapshot, projectId: string, employeeId: string, date: ISODate): DayEntry | undefined {
   return snapshot.timesheets.find((t) => t.id === sheetId(projectId, date))?.days?.[employeeId]?.[date];
 }
@@ -358,7 +401,7 @@ export function submitHours(
   const prev = currentEntry(snapshot, args.projectId, args.employeeId, args.date);
   if (prev && (prev.status !== "SUBMITTED" || prev.exported))
     throw new CommandError("Ten dzień jest już zatwierdzony. Zmiany wprowadza supervisor.");
-  if (isLocked(args.date, prev, new Date())) throw new CommandError("Termin minął — ten dzień zmieni już tylko administrator.");
+  closedCheck(snapshot, actor, args.projectId, args.date);
   const next: DayEntry = {
     ...(prev ?? {}),
     kind: "WORK",
@@ -396,7 +439,7 @@ export function reportAbsence(
     if (!projectId) continue;
     const prev = currentEntry(snapshot, projectId, args.employeeId, date);
     if (prev && (prev.status !== "SUBMITTED" || prev.exported)) continue;
-    if (isLocked(date, prev, now)) continue;
+    if (isWeekClosed(date, now)) continue;
     items.push({
       projectId,
       employeeId: args.employeeId,
@@ -480,10 +523,7 @@ export function editEntry(
   } else if (!input.absence) throw new CommandError("Wybierz rodzaj nieobecności.");
 
   const prev = currentEntry(snapshot, args.projectId, args.employeeId, args.date);
-  if (prev?.exported) throw new CommandError("Ten dzień jest już w Dataverse — nie można go zmienić.");
-  const actorRole = snapshot.employees.find((e) => e.id === actor.id)?.role;
-  if (isLocked(args.date, prev, new Date()) && actorRole !== "ADMIN")
-    throw new CommandError("Termin minął — ten dzień zmieni i zatwierdzi tylko administrator.");
+  closedCheck(snapshot, actor, args.projectId, args.date);
 
   const at = new Date().toISOString();
   let next: DayEntry = {
@@ -563,6 +603,11 @@ function describeValue(snapshot: Snapshot, key: keyof ProjectInput, value: unkno
     return snapshot.employees.find((e) => e.id === value)?.name ?? String(value);
   if (key === "startDate" || key === "endDate") return formatDate(String(value));
   if (key === "status") return PROJECT_STATUS_LABEL[value as Project["status"]];
+  if (key === "demand") {
+    const phases = value as Project["demand"];
+    if (!phases.length) return "—";
+    return phases.map((d) => `${formatDate(d.from)} – ${formatDate(d.to)}: E ${d.electricians}, M ${d.mechanics}`).join("; ");
+  }
   return String(value);
 }
 

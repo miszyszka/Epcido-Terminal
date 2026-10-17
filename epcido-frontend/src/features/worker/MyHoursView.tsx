@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarOff, ChevronLeft, ChevronRight, History, Lock, Send } from "lucide-react";
+import { CalendarOff, Check, ChevronLeft, ChevronRight, History, Lock, Send, TriangleAlert } from "lucide-react";
 import { useData, useModel, useUser } from "../../app/DataContext";
 import { useNow } from "../../app/hooks";
 import { DatePicker } from "../../components/DatePicker";
@@ -9,7 +9,8 @@ import { Field } from "../../components/Field";
 import { ProjectDot } from "../../components/PersonBadge";
 import { BreakChoice, TimeStepper } from "../../components/TimeStepper";
 import { ABSENCE_LABEL, formatDuration, workedMinutes } from "../../domain/labels";
-import { approvalNote, approveByDay, dayView, editRight, statusText } from "../../domain/workflow";
+import { cellView, sheetsFor, WITHHELD_MESSAGE, type CellView } from "../../domain/timesheets";
+import { approvalNote, approveByDay, editRight, statusText } from "../../domain/workflow";
 import type { AbsenceType, DayEntry, DayState, Project } from "../../domain/types";
 import { addDays, eachDay, formatDay, formatMinutes, formatTimestamp, isoWeek, startOfWeek, todayISO, weekdayIndex, type ISODate } from "../../lib/dates";
 import { cityOf } from "../../lib/search";
@@ -38,9 +39,36 @@ export function MyHoursView() {
   const entry = record?.entry;
   const project = record ? model.projectById.get(record.projectId) ?? null : projectFor(date);
   const weekMinutes = days.reduce((s, d) => s + workedMinutes(mine.get(d)?.entry), 0);
+  const sheets = sheetsFor(model, now);
+  const viewOf = (d: ISODate): CellView => {
+    const pid = mine.get(d)?.projectId ?? projectFor(d)?.id;
+    return pid ? cellView(sheets, pid, user.id, d, mine.get(d)?.entry) : { state: "off", sent: false, closed: false, missing: false };
+  };
+  // Wstrzymane timesheety z ostatnich tygodni, w których ta osoba pracowała
+  const withheld = useMemo(() => {
+    const out: { week: ISODate; project: Project }[] = [];
+    for (let i = 1; i <= 4; i++) {
+      const w = addDays(startOfWeek(today), -7 * i);
+      const ids = new Set(eachDay(w, addDays(w, 6)).map((d) => mine.get(d)?.projectId ?? projectFor(d)?.id).filter((x): x is string => Boolean(x)));
+      for (const id of ids) if (sheets.get(id, w)?.status === "withheld") out.push({ week: w, project: model.projectById.get(id)! });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, sheets, today, user.id]);
 
   return (
     <div className="page worker">
+      {withheld.map((w) => (
+        <button key={`${w.project.id}-${w.week}`} type="button" className="worker__withheld" onClick={() => setDate(w.week)}>
+          <TriangleAlert size={18} aria-hidden />
+          <span>
+            <strong>
+              Tydzień {isoWeek(w.week).week} · {w.project.name}: timesheet nie został wysłany.
+            </strong>{" "}
+            {WITHHELD_MESSAGE}
+          </span>
+        </button>
+      ))}
       <section className="worker__project">
         {project ? (
           <>
@@ -95,7 +123,7 @@ export function MyHoursView() {
           {days.map((d) => {
             const e = mine.get(d)?.entry;
             const future = d > today;
-            const v = dayView(e, d, now);
+            const v = viewOf(d);
             const onBreak = !e && !projectFor(d);
             return (
               <li key={d}>
@@ -105,11 +133,18 @@ export function MyHoursView() {
                   onClick={() => setDate(d)}
                   disabled={future}
                 >
-                  <DayCell state={v.state} size="map" sent={v.sent} today={d === today} label={statusText(e, d, now)} />
+                  <DayCell
+                    state={v.state}
+                    size="map"
+                    sent={v.sent}
+                    closed={v.closed}
+                    today={d === today}
+                    label={statusText(model, mine.get(d)?.projectId ?? projectFor(d)?.id ?? null, user.id, d, e, now)}
+                  />
                   <span className="wday__date">{formatDay(d)}</span>
                   <span className="wday__hours">{describe(e)}</span>
                   <span className={`wday__status ${v.state === "missed" ? "is-missed" : ""}`}>
-                    {e ? short(v.state, v.sent) : future ? "" : onBreak ? "przerwa" : "brak wpisu"}
+                    {v.missing ? "brak wpisu — nie wysłany" : e ? short(v.state, v.sent, v.closed) : future ? "" : onBreak ? "przerwa" : "brak wpisu"}
                   </span>
                 </button>
               </li>
@@ -136,9 +171,9 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
   const editable = Boolean(right?.can) && entry?.kind !== "ABSENCE";
   const worked = Math.max(0, end - start - breakMin);
   const unchanged = entry?.kind === "WORK" && entry.start === start && entry.end === end && (entry.breakMin ?? 0) === breakMin;
-  const v = dayView(entry, date, now);
+  const v: CellView = project ? cellView(sheetsFor(model, now), project.id, user.id, date, entry) : { state: "off", sent: false, closed: false, missing: false };
   const changes = (entry?.history ?? []).filter((h) => h.byId !== user.id);
-  const lockText = entry && !editable ? right?.reason ?? approvalNote(model, user.id, date, entry, now).split("\n")[0] : null;
+  const lockText = entry && !editable ? right?.reason ?? approvalNote(model, project!.id, user.id, date, entry, now).split("\n")[0] : null;
 
   return (
     <section className={`worker__day ${entry ? `is-${v.state}` : ""}`} aria-label="Wybrany dzień">
@@ -147,7 +182,7 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
           {formatDay(date)}
           {date === today && <span>, dziś</span>}
         </h2>
-        {entry && <span className={`badge ${badgeClass(v.state)}`}>{statusText(entry, date, now)}</span>}
+        {(entry || v.missing) && <span className={`badge ${badgeClass(v.state)}`}>{statusText(model, project?.id ?? null, user.id, date, entry, now)}</span>}
       </header>
 
       {entry?.kind === "ABSENCE" ? (
@@ -175,8 +210,8 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
               setSaving(false);
             }}
           >
-            <Send size={20} aria-hidden />
-            {!entry ? "Wyślij do zatwierdzenia" : unchanged ? "Wysłane — czeka na supervisora" : "Wyślij poprawione godziny"}
+            {unchanged ? <Check size={20} aria-hidden /> : <Send size={20} aria-hidden />}
+            {!entry ? "Wyślij do zatwierdzenia" : unchanged ? "Wysłane do supervisora" : "Wyślij poprawione godziny"}
           </button>
           <p className="worker__hint">
             Możesz poprawiać, dopóki supervisor nie zatwierdzi — najpóźniej do {formatDay(approveByDay(startOfWeek(date)))}, 23:59.
@@ -195,12 +230,14 @@ function DayEditor({ date, today, entry, project }: { date: ISODate; today: ISOD
 
       {lockText && (
         <p className={`worker__hint ${v.state === "missed" ? "worker__hint--missed" : ""}`}>
-          <Lock size={14} aria-hidden /> {lockText}
+          <Lock size={14} aria-hidden />
+          <span>{lockText}</span>
         </p>
       )}
       {!entry && !editable && (
         <p className="worker__hint">
-          <Lock size={14} aria-hidden /> {project ? right?.reason ?? "Tego dnia nie można już wpisać." : "Przerwa — bez zadania w projekcie."}
+          <Lock size={14} aria-hidden />
+          <span>{project ? right?.reason ?? "Tego dnia nie można już wpisać." : "Przerwa — bez zadania w projekcie."}</span>
         </p>
       )}
 
@@ -293,8 +330,9 @@ function describe(e: DayEntry | undefined) {
   return `${formatMinutes(e.start ?? 0)}–${formatMinutes(e.end ?? 0)}`;
 }
 
-function short(state: DayState, sent: boolean) {
+function short(state: DayState, sent: boolean, closed: boolean) {
   if (sent) return "wysłane";
+  if (closed && state !== "missed") return "zamknięte";
   if (state === "missed") return "nie wysłane";
   if (state === "pending") return "do zatwierdzenia";
   if (state === "absent") return "nieobecność";

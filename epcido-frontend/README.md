@@ -1,7 +1,7 @@
 # Epcido Terminal
 
 System planowania projektów i czasu pracy dla Epcido — następca Gantbee.
-Etap: **prototyp 0.4** — planowanie, obsada, zatwierdzanie godzin, ekran pracownika (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
+Etap: **prototyp 0.5** — planowanie, obsada, zatwierdzanie godzin, ekran pracownika (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
 
 ## Uruchomienie
 
@@ -38,12 +38,18 @@ Po lewej **panel roboczy** (tylko prototyp): przełączasz osobę i widzisz syst
 | Oś czasu | `/os-czasu` | jw. | Godziny od–do, przerwa, powód nieobecności; kliknięcie dnia otwiera okno dnia |
 | Struktura | `/struktura` | Planning, PM, IM, Admin | IM → projekt i Supervisor → zespół |
 | Ludzie | `/ludzie` | Planning, IM, Admin | Lista osób, przypisywanie do projektów |
-| Obsada | `/obsada` | Planning, Admin | Kto się zwalnia, gdzie brakuje ludzi, kto długo bez przerwy; „Zaplanuj dalej" i „Przerwa" |
+| Obsada | `/obsada` | Planning, Admin | Siła robocza w tygodniach, projekty bieżące i przyszłe z brakami, panel projektu z kandydatami, ludzie (kto, od kiedy, doświadczenie, umowa); przeciąganie osoby na projekt |
 | Brandbook | `/brandbook` | wszyscy | Kolory, krój, komponenty |
 
 „Dodaj nowy projekt" u góry (Admin, Planning, PM) i kliknięcie nazwy projektu otwierają **edytor na pełnym ekranie**: dane projektu z zapotrzebowaniem, plan zespołu z zadaniami od–do i przerwami, historię zmian.
 
 U góry jest wyszukiwarka z podpowiedziami (projekty, ludzie, ekrany). Przycisk „Wersja mobilna" pokazuje aplikację w ramce telefonu.
+
+### Timesheet i wtorek
+
+**Timesheet = wszystkie godziny wszystkich pracowników jednego projektu w jednym tygodniu** (w tygodniu jest tyle timesheetów, ile projektów). Zatwierdza się po osobie do poniedziałku 23:59. Od wtorku 00:00 tydzień jest zamknięty (wyszarzony, w paski); kompletny timesheet idzie do Dataverse we wtorek 23:00. Jeśli choć jeden dzień nie jest zatwierdzony albo brakuje wpisu, **cały timesheet jest wstrzymany** — poprawia go tylko administrator, a pozostali widzą „Czas minął. Skontaktuj się z administratorem…". Szczegóły: `docs/adr/0010-…`.
+
+Projekty mają kategorię (KNAPP, KARDEX, FORTNA, OTHER) i zapotrzebowanie w fazach (od–do, elektrycy, mechanicy). Pracownicy mają umowę (UoP, B2B, agencja — „nasi" to UoP i B2B, cel: co najmniej połowa na projekcie) i doświadczenie w miesiącach, łącznie i w każdej kategorii.
 
 ### Kolory i znaki dni (obowiązują w całym systemie)
 
@@ -53,14 +59,15 @@ U góry jest wyszukiwarka z podpowiedziami (projekty, ludzie, ekrany). Przycisk 
 | Golden Hour `#F4B13B` | Do zatwierdzenia |
 | Terracotta Clay `#E0745E` | Nieobecny |
 | Biały / piaskowy w weekend | Wolne lub brak wpisu |
-| Szary, kreskowany, wykrzyknik | Nie wysłane do Dataverse — nie zatwierdzone do pn 23:59; zatwierdza tylko Admin |
+| Wyszarzony, w ukośne paski | Tydzień zamknięty (od wtorku) — nienaruszalny |
+| Szary, kreskowany, wykrzyknik | Błąd — timesheet wstrzymany, nie wysłany; poprawia tylko Admin |
 | Zielony ptaszek | Wysłane do Dataverse |
 | Przerywana kreska pn \| wt | Termin zatwierdzenia poprzedniego tygodnia (pn 23:59) |
 | Kreskowane pole między zadaniami | Przerwa (bez zadania, bez wpisu godzin) |
 
 ### Dane testowe
 
-Administrator, Planista, 3 Project Managerów, 4 Installation Managerów, 10 Supervisorów, 20 Team Leaderów, 50 elektryków, 50 mechaników, 10 projektów z zapotrzebowaniem, zadania od–do (część z przerwami na wyjazd), godziny z ostatnich 10 tygodni z osobami i godzinami zatwierdzeń, kilka dni nie wysłanych i kilka zmian od supervisorów. Generator: `src/data/seed.ts` (deterministyczny). Jeśli w Firebase są dane ze starszej wersji, aplikacja zaproponuje ich wymianę.
+Wersja 5: administrator, planista, 3 Project Managerów, 4 Installation Managerów, 12 supervisorów, 20 Team Leaderów, 50 elektryków, 50 mechaników (umowy UoP / B2B / agencja mniej więcej po równo, doświadczenie w kategoriach), 10 bieżących projektów i 5 przyszłych (start za 3–13 tygodni) z kategoriami i fazami zapotrzebowania, zadania od–do (część z przerwami na wyjazd), godziny z ostatnich 10 tygodni z osobami i godzinami zatwierdzeń, 3 wstrzymane timesheety i kilka zmian od supervisorów. Generator: `src/data/seed.ts` (deterministyczny). Jeśli w Firebase są dane ze starszej wersji, aplikacja zaproponuje ich wymianę.
 
 ## Struktura kodu
 
@@ -70,7 +77,8 @@ src/
   data/         repository.ts (granica z bazą), commands.ts (zmiany + dziennik),
                 firestoreRepo.ts, memoryRepo.ts (demo), seed.ts
   domain/       typy, etykiety, permissions.ts (role), workflow.ts (terminy, kolejki, prawa do zmian),
-                staffing.ts (obsada, przerwy, braki)
+                timesheets.ts (timesheet projekt × tydzień, zamknięcie, wstrzymanie),
+                staffing.ts (obsada, fazy, kandydaci, przerwy, braki)
   components/   kropka dnia, dock, panel, kalendarz, pola formularza…
   features/     approvals, dashboard, hours (okno dnia), worker, map, timeline, grid, project, staffing,
                 structure, people, brandbook

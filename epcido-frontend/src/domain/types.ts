@@ -23,6 +23,18 @@ export type Position =
 
 export type Trade = "ELECTRICAL" | "MECHANICAL";
 
+/** Kategoria projektu = system, który montujemy. */
+export type ProjectCategory = "KNAPP" | "KARDEX" | "FORTNA" | "OTHER";
+
+/** Forma zatrudnienia. UoP i B2B to „nasi", agencja — pracownicy z agencji. */
+export type Employment = "UOP" | "B2B" | "AGENCY";
+
+/** Doświadczenie w miesiącach: łącznie i w projektach danej kategorii. */
+export interface Experience {
+  totalMonths: number;
+  byCategory: Record<ProjectCategory, number>;
+}
+
 export interface Employee {
   id: string;
   name: string;
@@ -32,10 +44,22 @@ export interface Employee {
   trade?: Trade;
   /** Numer pracownika z Enovy (przez Dataverse) — wypełni integracja */
   enovaNumber?: string;
+  /** Forma zatrudnienia — pracownicy w projektach */
+  employment?: Employment;
+  experience?: Experience;
   active: boolean;
 }
 
 export type ProjectStatus = "PLANNED" | "ACTIVE" | "ON_HOLD" | "CLOSED";
+
+/** Faza zapotrzebowania: ilu ludzi potrzeba w danym okresie (razem z Team Leaderami danej branży). Wpisuje PM. */
+export interface DemandPhase {
+  id: string;
+  from: ISODate;
+  to: ISODate;
+  electricians: number;
+  mechanics: number;
+}
 
 export interface Project {
   id: string;
@@ -54,9 +78,9 @@ export interface Project {
   projectManagerId: string | null;
   installationManagerId: string | null;
   supervisorId: string | null;
-  /** Zapotrzebowanie (liczba osób danej branży, razem z Team Leaderami). Wpisuje PM, korzysta Planning w Obsadzie. */
-  needElectricians?: number | null;
-  needMechanics?: number | null;
+  category: ProjectCategory;
+  /** Zapotrzebowanie w czasie (fazy). Wpisuje PM, korzysta Planning w Obsadzie. */
+  demand: DemandPhase[];
   /** Pola integracyjne — zmiana wpływa na połączenie z Business Central */
   dataverseId: string;
   dataverseNumber: string;
@@ -116,7 +140,10 @@ export interface DayEntry {
   history?: EntryChange[] | null;
 }
 
-/** Karta tygodnia projektu: id = `${projectId}_${weekStart}` */
+/**
+ * Timesheet = wszystkie godziny wszystkich osób w jednym projekcie w jednym tygodniu.
+ * W każdym tygodniu jest tyle timesheetów, ile projektów. id = `${projectId}_${weekStart}`
+ */
 export interface Timesheet {
   id: string;
   projectId: string;
@@ -134,6 +161,7 @@ export type AuditAction =
   | "ABSENCE_REPORTED"
   | "HOURS_APPROVED"
   | "HOURS_EDITED"
+  | "MEMBER_REMOVED"
   | "TEST_DATA_LOADED"
   | "TEST_DATA_CLEARED";
 
@@ -162,6 +190,7 @@ export interface Dataset {
  *  pending  — do zatwierdzenia,
  *  absent   — nieobecny,
  *  off      — wolne / brak wpisu,
- *  missed   — nie zatwierdzone do poniedziałku 23:59: nie wysłane do Dataverse, zatwierdza tylko administrator.
+ *  missed   — błąd w zamkniętym timesheecie (brak zatwierdzenia albo brak wpisu): timesheet nie został wysłany,
+ *             poprawia tylko administrator.
  */
 export type DayState = "approved" | "pending" | "absent" | "off" | "missed";

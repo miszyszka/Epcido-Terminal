@@ -6,11 +6,12 @@ import { useNow } from "../../app/hooks";
 import { useUi } from "../../app/UiContext";
 import { DayCell } from "../../components/DayCell";
 import { PageHeader } from "../../components/PageHeader";
-import { PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { EmploymentTag, PositionMark, ProjectDot } from "../../components/PersonBadge";
 import { Segmented } from "../../components/Segmented";
 import { SelectMenu } from "../../components/SelectMenu";
-import { POSITION_LABEL, TRADE_LABEL } from "../../domain/labels";
-import { approvalNote, dayView, describeHours } from "../../domain/workflow";
+import { CATEGORIES, formatMonths, POSITION_LABEL, TRADE_LABEL } from "../../domain/labels";
+import { cellView, sheetsFor } from "../../domain/timesheets";
+import { approvalNote, describeHours } from "../../domain/workflow";
 import { can, canEditProject, visibleProjects } from "../../domain/permissions";
 import type { Employee } from "../../domain/types";
 import { addDays, eachDay, formatDate, formatDay, startOfWeek, todayISO } from "../../lib/dates";
@@ -101,6 +102,8 @@ export function PeopleView() {
             <tr>
               <th scope="col">Osoba</th>
               <th scope="col">Stanowisko</th>
+              <th scope="col">Umowa</th>
+              <th scope="col">Doświadczenie</th>
               <th scope="col">Projekt teraz</th>
               <th scope="col">Następnie</th>
               <th scope="col">Ten tydzień</th>
@@ -126,6 +129,26 @@ export function PeopleView() {
                   <td className="muted">
                     {POSITION_LABEL[e.position]}
                     {e.position === "TEAM_LEADER" && e.trade ? `, ${TRADE_LABEL[e.trade]}` : ""}
+                  </td>
+                  <td>{e.employment ? <EmploymentTag employee={e} /> : <span className="muted">—</span>}</td>
+                  <td>
+                    {e.experience ? (
+                      <span
+                        className="exp-cell"
+                        data-tip={CATEGORIES.map((c) => `${c}: ${formatMonths(e.experience!.byCategory[c])}`).join("\n")}
+                      >
+                        <strong>{formatMonths(e.experience.totalMonths)}</strong>
+                        <span>
+                          {CATEGORIES.filter((c) => e.experience!.byCategory[c] > 0)
+                            .sort((a, b) => e.experience!.byCategory[b] - e.experience!.byCategory[a])
+                            .slice(0, 2)
+                            .map((c) => `${c} ${formatMonths(e.experience!.byCategory[c])}`)
+                            .join(" · ")}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
                   </td>
                   <td>
                     {projects.length === 0 ? (
@@ -159,16 +182,18 @@ export function PeopleView() {
                   <td>
                     <span className="week-strip">
                       {week.map((d) => {
-                        const entry = model.entriesOf(e.id).get(d)?.entry;
-                        const v = dayView(entry, d, now);
+                        const rec = model.entriesOf(e.id).get(d);
+                        const entry = rec?.entry;
+                        const v = rec ? cellView(sheetsFor(model, now), rec.projectId, e.id, d, entry) : { state: "off" as const, sent: false, closed: false };
                         return (
                           <DayCell
                             key={d}
                             state={v.state}
                             size="mini"
                             sent={v.sent}
+                            closed={v.closed}
                             today={d === today}
-                            label={`${e.name}, ${formatDay(d)}\n${describeHours(entry)}${entry ? `\n${approvalNote(model, e.id, d, entry, now)}` : ""}`}
+                            label={`${e.name}, ${formatDay(d)}\n${describeHours(entry)}${rec ? `\n${approvalNote(model, rec.projectId, e.id, d, entry, now)}` : ""}`}
                           />
                         );
                       })}

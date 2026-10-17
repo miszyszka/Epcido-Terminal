@@ -58,7 +58,9 @@ function EditorInner({ projectId, initialTab }: { projectId: string | null; init
   const dirty = useMemo(() => {
     if (!project) return true;
     const original = projectToInput(project);
-    const fieldsChanged = (Object.keys(original) as (keyof ProjectInput)[]).some((k) => (original[k] ?? "") !== (values[k] ?? ""));
+    const fieldsChanged = (Object.keys(original) as (keyof ProjectInput)[]).some(
+      (k) => JSON.stringify(original[k] ?? "") !== JSON.stringify(values[k] ?? "")
+    );
     const existing = model.assignmentsByProject.get(project.id) ?? [];
     const teamChanged =
       existing.length !== draft.length ||

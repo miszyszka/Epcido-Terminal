@@ -28,18 +28,21 @@ interface DayCellProps {
   sent?: boolean;
   /** Dzień w zaplanowanym zadaniu, jeszcze bez wpisu (przyszłość) */
   planned?: boolean;
+  /** Tydzień zamknięty (od wtorku) — lekko wyszarzony, w ukośne paski */
+  closed?: boolean;
   today?: boolean;
   /** Treść dymka i opisu dla czytników ekranu */
   label: string;
 }
 
 /** Kropka dnia — ten sam obiekt na mapie, w legendzie i przy osobach (brandbook 2.3 i 6). */
-export function DayCell({ state, size = "map", sent, planned, today, label }: DayCellProps) {
+export function DayCell({ state, size = "map", sent, planned, closed, today, label }: DayCellProps) {
   const cls = [
     "day",
     `day--${state}`,
     `day--${size}`,
     planned && state === "off" ? "day--planned" : "",
+    closed && state !== "missed" ? "day--closed" : "",
     today ? "day--today" : "",
   ]
     .filter(Boolean)
@@ -56,6 +59,10 @@ interface DayCardProps {
   entry: DayEntry | undefined;
   state: DayState;
   sent?: boolean;
+  /** Tydzień zamknięty — nienaruszalny (paski) */
+  closed?: boolean;
+  /** Brak wpisu w wstrzymanym timesheecie */
+  missing?: boolean;
   /** Dzień w zadaniu bez wpisu — pokazuje „brak wpisu" zamiast pustego pola */
   expected?: boolean;
   planned?: boolean;
@@ -72,12 +79,14 @@ interface DayCardProps {
  * Kolor wypełnienia = stan dnia, ptaszek = wysłane do Dataverse, wykrzyknik = nie wysłane,
  * kropka w rogu = zmienione przez osobę zatwierdzającą (szczegóły w notatce dnia).
  */
-export function DayCard({ entry, state, sent, expected, planned, onClick, tip, label }: DayCardProps) {
+export function DayCard({ entry, state, sent, closed, missing, expected, planned, onClick, tip, label }: DayCardProps) {
   const edited = Boolean(entry?.history?.length);
   const cls = [
     "daycard",
     `daycard--${state}`,
     planned && !entry ? "daycard--planned" : "",
+    closed && state !== "missed" ? "daycard--closed" : "",
+    missing ? "daycard--missing" : "",
     onClick ? "is-clickable" : "",
   ]
     .filter(Boolean)
@@ -91,6 +100,9 @@ export function DayCard({ entry, state, sent, expected, planned, onClick, tip, l
   } else if (entry && entry.start != null && entry.end != null) {
     main = `${formatMinutes(entry.start)}–${formatMinutes(entry.end)}`;
     sub = `przerwa ${entry.breakMin ?? 0} min`;
+  } else if (missing) {
+    main = "Brak wpisu";
+    sub = "nie wysłany";
   } else if (planned) {
     sub = "plan";
   } else if (expected) {
