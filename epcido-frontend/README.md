@@ -2,6 +2,7 @@
 
 System planowania projektów i czasu pracy dla Epcido — następca Gantbee.
 Etap: **prototyp 0.6** — planowanie, obsada, zatwierdzanie godzin, urlopy, ekran pracownika, administracja (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
+**Przejmujesz pracę? Zacznij od `docs/KONTYNUACJA.md`** (stan, architektura tymczasowa i docelowa, dostęp do repozytorium, następne kroki).
 
 ## Uruchomienie
 
