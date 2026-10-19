@@ -3,6 +3,7 @@ import { Check, CalendarPlus, FileCheck2, Undo2, X } from "lucide-react";
 import { useData, useModel, useUser } from "../../app/DataContext";
 import { PageHeader } from "../../components/PageHeader";
 import { EmploymentTag, PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
 import { Segmented } from "../../components/Segmented";
 import { SelectMenu } from "../../components/SelectMenu";
 import { leaveImpact, leavesInScope } from "../../domain/leaves";
@@ -131,8 +132,7 @@ export function LeavesView() {
 function Person({ employee }: { employee: Employee }) {
   return (
     <span className="leave-person">
-      <PositionMark employee={employee} />
-      <strong>{employee.name}</strong>
+      <PersonLink employee={employee} />
       <EmploymentTag employee={employee} />
     </span>
   );
@@ -352,8 +352,7 @@ function Calendar({ leaves, today }: { leaves: LeaveRequest[]; today: ISODate })
             return (
               <div key={employee.id} className="cal__row">
                 <div className="cal__name">
-                  <PositionMark employee={employee} />
-                  <span>{employee.name}</span>
+                  <PersonLink employee={employee} />
                   {project && <ProjectDot color={project.color} />}
                 </div>
                 <div className="cal__track" style={{ backgroundImage: weekendBg }}>

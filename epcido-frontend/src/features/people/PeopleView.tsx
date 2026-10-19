@@ -6,7 +6,8 @@ import { useNow } from "../../app/hooks";
 import { useUi } from "../../app/UiContext";
 import { DayCell } from "../../components/DayCell";
 import { PageHeader } from "../../components/PageHeader";
-import { EmploymentTag, PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { EmploymentTag, ProjectDot } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
 import { EMPTY_PEOPLE_FILTER, PeopleFilters, passesPeopleFilter, type PeopleFilterValue } from "../../components/PeopleFilters";
 import { Segmented } from "../../components/Segmented";
 import { SelectMenu } from "../../components/SelectMenu";
@@ -132,10 +133,7 @@ export function PeopleView() {
               return (
                 <tr key={e.id}>
                   <th scope="row">
-                    <span className="person-cell">
-                      <PositionMark employee={e} />
-                      {e.name}
-                    </span>
+                    <PersonLink employee={e} />
                   </th>
                   <td className="muted">
                     {POSITION_LABEL[e.position]}

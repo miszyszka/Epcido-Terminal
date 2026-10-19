@@ -39,8 +39,8 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   "team.plan": "Planuje zespoły (zadania od–do)",
   "staffing.plan": "Obsada: przesuwa ludzi między projektami",
   "hours.own": "Wpisuje swoje godziny",
-  "hours.approveTeam": "Zatwierdza godziny zespołu (supervisor projektu)",
-  "hours.approveFinal": "Zatwierdza godziny po supervisorach (IM projektu)",
+  "hours.approveTeam": "Zatwierdza godziny zespołu — ostatecznie (supervisor projektu)",
+  "hours.approveFinal": "Zatwierdza godziny supervisorów (IM projektu)",
   "hours.approveAll": "Zatwierdza i zmienia godziny we wszystkich projektach",
   "hours.fixWithheld": "Poprawia wstrzymane timesheety po terminie",
   "leave.own": "Składa wnioski o urlop i zgłasza L4",
@@ -70,8 +70,18 @@ export const PERMISSION_ORDER = PERMISSION_GROUPS.flatMap((g) => g.items);
 export const ROLE_PERMISSIONS: Record<AccessRole, Permission[]> = {
   ADMIN: PERMISSION_ORDER.filter((p) => !["projects.own", "hours.own", "leave.own", "leave.approveProject"].includes(p)),
   PLANNING: ["projects.all", "project.create", "project.edit", "map.view", "team.plan", "staffing.plan", "people.view", "structure.view", "leave.view"],
+  // Project Manager prowadzi projekt, ale godzin nie zatwierdza — nigdy (ADR 0012)
   PROJECT_MANAGER: ["projects.own", "project.create", "project.edit", "map.view", "structure.view"],
-  INSTALLATION_MANAGER: ["projects.own", "map.view", "hours.approveFinal", "leave.approveProject", "dashboard.supervisors", "people.view", "structure.view"],
+  // Installation Manager widzi wszystkie projekty (swoje i innych IM), zatwierdza tylko godziny swoich supervisorów
+  INSTALLATION_MANAGER: [
+    "projects.all",
+    "map.view",
+    "hours.approveFinal",
+    "leave.approveProject",
+    "dashboard.supervisors",
+    "people.view",
+    "structure.view",
+  ],
   SUPERVISOR: ["projects.own", "map.view", "hours.own", "hours.approveTeam", "leave.own", "leave.approveProject"],
   HR: ["people.view", "leave.approveAll", "leave.view"],
   WORKER: ["hours.own", "leave.own"],
@@ -118,6 +128,50 @@ export function visibleProjects(model: Model, user: Employee): Project[] {
       p.supervisorId === user.id ||
       (can(user, "hours.approveAll") ? true : assigned.has(p.id))
   );
+}
+
+/**
+ * Czyj to projekt z punktu widzenia osoby patrzącej: „mine" — prowadzi go albo w nim pracuje,
+ * „other" — cudzy, widoczny tylko dlatego, że ktoś widzi wszystkie projekty.
+ * Installation Manager widzi całą firmę, więc w każdym widoku musi wiedzieć, co jest jego.
+ */
+export type ProjectScope = "mine" | "other";
+
+export function projectScope(model: Model, user: Employee, project: Project): ProjectScope {
+  if (
+    project.projectManagerId === user.id ||
+    project.installationManagerId === user.id ||
+    project.supervisorId === user.id
+  )
+    return "mine";
+  return (model.assignmentsByEmployee.get(user.id) ?? []).some((a) => a.projectId === project.id) ? "mine" : "other";
+}
+
+/**
+ * Czy warto pokazać osobie podział „moje / cudze". Ma sens tylko wtedy, gdy ktoś widzi całą firmę,
+ * a jednocześnie sam coś prowadzi — czyli dla Installation Managera. Planning widzi wszystko,
+ * ale nic nie jest „jego", więc podziału nie pokazujemy.
+ */
+export function seesOtherProjects(model: Model, user: Employee): boolean {
+  if (!can(user, "projects.all")) return false;
+  let mine = 0;
+  let other = 0;
+  for (const p of model.projects) {
+    if (projectScope(model, user, p) === "mine") mine++;
+    else other++;
+  }
+  return mine > 0 && other > 0;
+}
+
+/** Projekty, za które osoba odpowiada albo w których pracuje. */
+export function ownProjects(model: Model, user: Employee): Project[] {
+  return model.projects.filter((p) => projectScope(model, user, p) === "mine");
+}
+
+/** Installation Manager prowadzący ten projekt (do opisu „projekt Anny K."). */
+export function projectOwnerName(model: Model, project: Project): string | null {
+  const im = project.installationManagerId ? model.employeeById.get(project.installationManagerId) : null;
+  return im?.name ?? null;
 }
 
 export function canEditProject(user: Employee | null, project: Project): boolean {

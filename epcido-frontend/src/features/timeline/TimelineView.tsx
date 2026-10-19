@@ -4,6 +4,7 @@ import { useModel, useUser } from "../../app/DataContext";
 import { Legend } from "../../components/Legend";
 import { PageHeader } from "../../components/PageHeader";
 import { ProjectDot } from "../../components/PersonBadge";
+import { ScopeFilter, useScope } from "../../components/ScopeFilter";
 import { WeekNav } from "../../components/WeekNav";
 import { visibleProjects } from "../../domain/permissions";
 import { addDays, eachDay, startOfWeek, todayISO } from "../../lib/dates";
@@ -26,7 +27,10 @@ export function TimelineView() {
   const days = useMemo(() => eachDay(from, addDays(from, WEEKS * 7 - 1)), [from]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  let matches = visibleProjects(model, user).map((project) => ({ project, people: null as Set<string> | null }));
+  const scope = useScope(model, user);
+  let matches = visibleProjects(model, user)
+    .filter((p) => scope.pass(p))
+    .map((project) => ({ project, people: null as Set<string> | null }));
   if (focus) matches = matches.filter((m) => m.project.id === focus);
   if (person) {
     const only = new Set([person.id]);
@@ -60,6 +64,7 @@ export function TimelineView() {
       <div className="map-bar">
         <Legend />
         <div className="map-bar__tools">
+          <ScopeFilter scope={scope} />
           {focusProject && (
             <button
               type="button"
@@ -120,6 +125,7 @@ export function TimelineView() {
               only={people}
               collapsed={collapsed.has(project.id)}
               onToggle={() => toggle(project.id)}
+              scope={scope}
             />
           ))}
         </div>

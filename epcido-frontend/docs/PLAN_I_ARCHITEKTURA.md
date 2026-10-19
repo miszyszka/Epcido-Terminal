@@ -177,6 +177,7 @@ stateDiagram-v2
 - **Po eksporcie wpisów nie edytujemy.** Korekta tworzy rekord korygujący (+/- godziny), który trafia do kolejnej paczki. Dzięki temu Dataverse/Enova/BC zawsze mają spójną historię.
 - Eksport jest **idempotentny**: każdy rekord ma stały identyfikator zewnętrzny. Ponowne wysłanie nie tworzy duplikatów.
 - Każda paczka ma numer, sumy kontrolne (liczba rekordów, suma godzin) i raport sukcesów/błędów.
+- **Kto akceptuje** (rozstrzygnięte w ADR 0012): dzień członka zespołu (TL, elektryk, mechanik) domyka **supervisor projektu** i to jest akceptacja ostateczna; dzień samego supervisora domyka **Installation Manager projektu**. Project Manager nie akceptuje godzin w ogóle. Administrator może wszystko.
 - **Otwarte:** co z wpisami niezaakceptowanymi w terminie (pominąć i wysłać później / auto-akceptacja / blokada eksportu całości)?
 
 ---

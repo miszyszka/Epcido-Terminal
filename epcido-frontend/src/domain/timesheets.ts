@@ -11,7 +11,7 @@
 import type { Model } from "../app/DataContext";
 import { addDays, eachDay, startOfWeek, weekdayIndex, type ISODate } from "../lib/dates";
 import type { DayEntry, DayState, Project } from "./types";
-import { exportAt, isFinal, lockAt, nextExportAfter } from "./workflow";
+import { exportAt, isComplete, lockAt, nextExportAfter } from "./workflow";
 
 export type SheetStatus = "open" | "closed" | "sent" | "withheld";
 
@@ -68,7 +68,7 @@ function computeSheet(model: Model, project: Project, week: ISODate, now: Date):
       const e = days?.get(d);
       if (e) {
         entries.push(e);
-        if (!isFinal(e)) problems.push({ employeeId, date: d, kind: "unapproved" });
+        if (!isComplete(project, employeeId, e)) problems.push({ employeeId, date: d, kind: "unapproved" });
       }
     }
     for (const d of expectedDays(model, project, employeeId, week)) if (!days?.get(d)) problems.push({ employeeId, date: d, kind: "missing" });

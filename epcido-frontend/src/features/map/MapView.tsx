@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useModel, useUser } from "../../app/DataContext";
 import { Legend } from "../../components/Legend";
 import { PageHeader } from "../../components/PageHeader";
+import { ScopeFilter, useScope } from "../../components/ScopeFilter";
 import { WeekNav } from "../../components/WeekNav";
 import { visibleProjects } from "../../domain/permissions";
 import { addDays, eachDay, startOfWeek, todayISO } from "../../lib/dates";
@@ -47,11 +48,12 @@ export function MapView() {
   // bieżący tydzień i jeden następny zawsze widoczne, reszta wstecz
   const from = addDays(currentWeek, (offset - (WEEKS - 2)) * 7);
   const days = useMemo(() => eachDay(from, addDays(from, WEEKS * 7 - 1)), [from, WEEKS]);
-  const projects = visibleProjects(model, user);
+  const scope = useScope(model, user);
+  const projects = visibleProjects(model, user).filter((p) => scope.pass(p));
 
   return (
     <div className="page" ref={ref}>
-      <PageHeader title="Plan projektów" />
+      <PageHeader title="Plan projektów" actions={<ScopeFilter scope={scope} />} />
       <div className="map-sticky">
         <div className="map-sticky__bar">
           <Legend />
@@ -75,12 +77,12 @@ export function MapView() {
       </div>
       {projects.length === 0 ? (
         <div className="empty">
-          <p>Nie masz jeszcze żadnych projektów.</p>
+          <p>{scope.showScope && scope.value !== "all" ? "Żaden projekt nie pasuje do wybranego zakresu." : "Nie masz jeszcze żadnych projektów."}</p>
         </div>
       ) : (
         <div className="pcards">
           {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} days={days} today={today} variant="compact" hideDaysHead={!narrow} />
+            <ProjectCard key={project.id} project={project} days={days} today={today} variant="compact" hideDaysHead={!narrow} scope={scope} />
           ))}
         </div>
       )}

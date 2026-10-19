@@ -54,7 +54,8 @@ export function AutoStaffDialog({
 }: {
   project: Project;
   team: TeamItem[];
-  onApply: (items: ProposalItem[]) => void | Promise<unknown>;
+  /** Zwrócenie `false` oznacza, że zapis nie doszedł do skutku (np. planista nie potwierdził) — okno zostaje otwarte. */
+  onApply: (items: ProposalItem[]) => boolean | void | Promise<boolean | void>;
   onClose: () => void;
 }) {
   const model = useModel();
@@ -169,7 +170,7 @@ export function AutoStaffDialog({
             disabled={busy || chosen.length === 0 || duplicate.size > 0}
             onClick={async () => {
               setBusy(true);
-              await onApply(
+              const done = await onApply(
                 chosen.map(({ g, c }) => ({
                   employeeId: c.employee.id,
                   projectId: project.id,
@@ -180,7 +181,7 @@ export function AutoStaffDialog({
                 }))
               );
               setBusy(false);
-              onClose();
+              if (done !== false) onClose();
             }}
           >
             <Sparkles size={16} aria-hidden />

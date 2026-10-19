@@ -950,12 +950,18 @@ input[list]::-webkit-calendar-picker-indicator {
 }
 
 /* Okno dialogowe */
+/*
+ * Flex, nie grid: przy gridzie wiersz dostawał naturalną wysokość okna, więc wysokie okno
+ * (np. „Zaproponuj obsadę") wystawało poniżej ekranu i nie dało się go przewinąć.
+ * W flexie wysokość linii jest wysokością ekranu, a `max-height` faktycznie przycina okno.
+ */
 .dialog-root {
   position: fixed;
   inset: 0;
   z-index: 70;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 24px;
 }
 .dialog-backdrop {
@@ -969,7 +975,7 @@ input[list]::-webkit-calendar-picker-indicator {
   display: flex;
   flex-direction: column;
   width: min(640px, 100%);
-  max-height: min(820px, calc(100% - 16px));
+  max-height: min(820px, 100%);
   border-radius: var(--r-sheet);
   background: var(--surface);
   box-shadow: var(--shadow-float);

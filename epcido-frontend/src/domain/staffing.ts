@@ -17,6 +17,8 @@ export const RELEASE_HORIZON_WEEKS = 8;
 const OPEN_END = "9999-12-31";
 
 export const FIELD_POSITIONS: Employee["position"][] = ["TEAM_LEADER", "ELECTRICIAN", "MECHANIC"];
+/** Ludzie, których Planning układa na osi: zespół w terenie plus supervisorzy (nadzór projektów). */
+export const BOARD_POSITIONS: Employee["position"][] = [...FIELD_POSITIONS, "SUPERVISOR"];
 
 /** Faktyczny koniec zadania: data „do" albo koniec projektu (albo bez końca). */
 export function assignmentEnd(model: Model, a: Assignment): ISODate {
@@ -45,6 +47,46 @@ export function workChains(model: Model, employeeId: string): Chain[] {
     }
   }
   return chains;
+}
+
+/** Pasek osoby na osi: zadanie w projekcie albo nadzór supervisora nad całym projektem. */
+export interface PersonBar {
+  key: string;
+  assignmentId: string | null;
+  projectId: string;
+  from: ISODate;
+  to: ISODate;
+  task: string | null;
+  supervision: boolean;
+}
+
+/**
+ * Wszystko, co osoba ma na osi czasu. Elektryk, mechanik i TL mają zadania; supervisor nie ma
+ * przypisań — jego „pasek" to projekty, w których jest wpisany jako nadzór, przez cały ich czas.
+ */
+export function personBars(model: Model, employeeId: string): PersonBar[] {
+  const bars: PersonBar[] = (model.assignmentsByEmployee.get(employeeId) ?? []).map((a) => ({
+    key: a.id,
+    assignmentId: a.id,
+    projectId: a.projectId,
+    from: a.from,
+    to: assignmentEnd(model, a),
+    task: a.task ?? null,
+    supervision: false,
+  }));
+  for (const p of model.projects) {
+    if (p.supervisorId !== employeeId || p.status === "CLOSED") continue;
+    bars.push({
+      key: `sv-${p.id}`,
+      assignmentId: null,
+      projectId: p.id,
+      from: p.startDate,
+      to: p.endDate ?? OPEN_END,
+      task: "Nadzór",
+      supervision: true,
+    });
+  }
+  return bars.sort((a, b) => a.from.localeCompare(b.from));
 }
 
 export type OutlookStatus = "releasing" | "free" | "working" | "later";

@@ -224,13 +224,17 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 - U góry dwa przełączniki-filtry (branża, kategoria) i jedno zdanie, jak przeciągać.
 - **Wymaga uwagi**: karty 340 px w siatce — ikona (czerwona: braki przed startem, tygodnie bez rezerwy; złota: za mało EPCIDO, długo bez przerwy; zielona: urlopy, ludzie bez przydziału), jedno zdanie z nazwą projektu pogrubioną i jeden przycisk akcji.
 - Wszystkie siatki mają te same kolumny tygodni (od bieżącego), szerokość 56 px, nazwa `--staff-name` 230 px, kolumna boczna `--staff-side` 250 px.
+- **Oś tygodni jest jedna dla projektów i ludzi** (`.staff-ruler`), przyklejona do góry ekranu w obrębie tablicy. Przy najniższym projekcie wciąż widać, od którego tygodnia zaczyna się kolumna, a moduł „Ludzie” stoi dokładnie pod projektami — tygodnie pokrywają się w pionie. Tablica (`.staff-board`) to jedna karta: oś, projekty, ludzie.
+- **Czyj to projekt**: przy nazwie mała plakietka — „moje” (Forest 100 na Deep Forest) albo nazwisko Installation Managera (obrys kreskowany, tekst `--ink-3`). Wiersz cudzego projektu ma stonowaną kolumnę nazwy. Filtr „Moje / Innych IM / Wszystkie” pokazuje się tylko komuś, kto ma i swoje, i cudze projekty.
 - **Siła robocza**: wykres 132 px — w każdym tygodniu dwa słupki (E, M): wypełnienie w kolorze branży = w planie, ciemny obrys = potrzeba (czerwony, gdy brakuje), szare kreski nad wypełnieniem = wolni. Pod spodem wiersze brakuje / wolni / bilans.
 - **Projekty × tygodnie**: tło tygodni w kolorze projektu (12%), w komórce **dwa pionowe słupki**: kreskowany obrys w kolorze branży = potrzeba, wypełnienie = w planie, białe kreski u góry wypełnienia = na urlopie. Pod słupkiem liczba w planie albo brak „−2" w `#9E4232`. Skala słupków — największa wartość w wierszu projektu.
 - Pod nazwą projektu: „koniec … · za N tyg." i „EPCIDO 64% · 11 os." (poniżej celu — `#9E4232`). Po prawej najbliższy brak i ikona „Zaproponuj obsadę".
 - **Przeciąganie**: cel to tydzień projektu (obrys Deep Forest, nad komórką ciemna etykieta „Mechanik 24: 23 lis – 5 gru"). Upuszczenie dodaje osobę do końca fazy z „Cofnij"; z Shift — okno z opcjami.
 - **Propozycja obsady** (okno lg, 900 px): grupy faza × branża z „2/8 · brakuje 6", wiersze z polem wyboru (stanowisko, osoba, umowa, staż w kategorii, od kiedy, urlop w fazie, „teraz Projekt 2 do 27 lis"). Na dole: „Zaznaczono 13 · EPCIDO po zmianie: 64%".
 - **Ludzie × tygodnie**: uchwyt, osoba z umową, „Projekt 6 · kończy cz, 22 paź", staż „KNAPP 4 lata · łącznie 10 lat". Paski projektów, przerwy piaskowe z kubkiem, urlopy w paski Terracotty (wniosek — złote), linia „dziś". Po prawej: „wolny od …", podpowiedź projektu z brakiem, „Zaplanuj" / „Przerwa".
-- Filtry ludzi: EPCIDO / agencja i suwaki „Staż łącznie od …", „Staż w KNAPP od …" (te same w ekranie Ludzie).
+- Filtry ludzi: stanowisko (Wszyscy / Elektrycy / Mechanicy / TL / SV), stan (zwalniają się, wolni, bez przerwy, wszyscy), kolejność, szukanie po nazwisku oraz EPCIDO / agencja i suwaki „Staż łącznie od …”, „Staż w KNAPP od …” (te same w ekranie Ludzie).
+- **Zaznaczanie okresu**: naciśnięcie i przeciągnięcie po pasku osoby rysuje prostokąt z obrysem Deep Forest i ciemną etykietą z datami; po puszczeniu otwiera się okno z wyborem „Przypisz do projektu” / „Powrót do domu” (dwa duże pola wyboru z ikoną, tytułem i jednym zdaniem).
+- Ten sam moduł „Ludzie” stoi pod planem zespołu w edytorze projektu — z własną, przyklejoną osią tygodni i własnym przewijaniem (maks. 420 px).
 
 ### Urlopy
 - **Wniosek do akceptacji**: karta w czterech kolumnach — osoba i data wniosku · rodzaj (etykieta „Urlop" / „L4" / „Inna"), daty, dni robocze, uwagi · wpływ na projekt („Projekt 3 · elektrycy w tygodniu 19.10: **6 → 5 z 8**", poniżej potrzeby — na Terracotta 100) i kto jeszcze ma wolne · „Odrzuć" (cichy; wymaga powodu) i „Akceptuj" (główny).
@@ -278,7 +282,23 @@ Tekst przycisku mówi, co się stanie. Komunikat po akcji używa tego samego sł
 ## 7. Ruch
 
 - Ruch odpowiada na działanie użytkownika: okno się pojawia (240 ms), podpowiedzi i panel zadania (160 ms).
-- `prefers-reduced-motion` wyłącza wszystkie animacje. Krzywa: `cubic-bezier(.2, .8, .2, 1)`.
+- Cały ruch mieszka w `src/styles/motion.css`. Zasada: ruch ma coś mówić (coś się pojawiło, coś zareagowało, coś zniknęło), nigdy zdobić.
+- Wejścia: ekran i karty wjeżdżają o 10 px w górę, kafelki „Wymaga uwagi” wsuwają się z lewej z kaskadą 50 ms (pierwsze trzy).
+- Reakcje: przycisk podnosi się o 1 px i siada przy naciśnięciu (0,985), ikony i plakietki kurczą się do 0,94; aktywna pozycja przełącznika i docka „siada” z lekkim odbiciem (220 ms); kropka dnia rośnie do 1,22 przy najechaniu.
+- Słupki obsady i paski postępu zmieniają wysokość i szerokość płynnie (240 ms) — liczba zmienia się razem z obrazem.
+- `prefers-reduced-motion` wyłącza wszystkie animacje; reguła stoi na końcu `motion.css`, czyli na końcu kaskady. Krzywa: `cubic-bezier(.2, .8, .2, 1)`.
+
+### Podgląd osoby
+- Lekkie okno (760 px) otwierane kliknięciem w nazwisko — nazwisko ma podkreślenie dopiero przy najechaniu, żeby tabela nie wyglądała jak las odnośników.
+- Nagłówek: znacznik stanowiska, imię i nazwisko, stanowisko · branża · umowa. Pod spodem jedno zdanie „Teraz: Projekt 6 · Prace mechaniczne · kończy cz, 29 paź” na Forest 50.
+- Trzy zakładki: **Plan tygodniowy** (oś 12 tygodni po 54 px, paski projektów, przerwy z kubkiem, urlopy jako pasek 7 px pod spodem, linia „dziś”, pod osią lista kroków „teraz / 2 lis / przerwa”), **Godziny** (kafelki liczb, tygodnie z kropkami dni i sumą, lista dni bez podpisu na Golden 100), **Dane i doświadczenie**.
+
+### Panel roboczy (tylko prototyp)
+- Celowo nie wygląda jak produkt: czarne tło `#07100F`, monospace, małe litery, zielony znak zachęty `$`. Ma się odcinać od aplikacji obok i zniknąć razem z wejściem logowania.
+- Po wybraniu osoby panel chowa się sam. Wraca zakładką przy lewej krawędzi.
+
+### Potwierdzenia
+- Każdy zapis planisty pyta przed zapisem: tytuł pytaniem („Zapisać zmiany w Projekt 1?”), lista zmian jako karty z lewą kreską (pierwsza pogrubiona), przyciski „Wróć do edycji” (cichy) i „Zapisz zmiany” (główny). Zmiana nieodwracalna albo z kolizją — przycisk w Terracotcie.
 
 ---
 

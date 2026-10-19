@@ -2,6 +2,30 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje: SemVer.
 
+## [0.7.0] - 2026-10-19
+
+### Nowe funkcje
+- **Podgląd osoby.** Kliknięcie w nazwisko w dowolnym widoku (tabele, plany, kolejka zatwierdzania, struktura, urlopy) otwiera lekkie okno: gdzie osoba jest teraz, kiedy kończy, kiedy ma przerwę i dokąd leci dalej — na osi 12 tygodni; jej godziny z 4 tygodni (suma, zatwierdzone, czekające, nieobecności, dni tygodnia, lista dni bez podpisu) oraz dane, umowa i doświadczenie w kategoriach.
+- **Moduł „Ludzie" w planowaniu projektu.** Ten sam moduł co w Obsadzie, pod planem zespołu: kto jest wolny w kolejnych tygodniach, z filtrem stanowisk i zaznaczaniem okresu.
+- **Zaznaczanie okresu myszą.** Naciśnięcie i przeciągnięcie po pasku osoby otwiera okno z wyborem: przypisanie do projektu (z zadaniem i datami) albo powrót do domu — przerwa w trwającym zadaniu.
+- **Filtr stanowisk w module „Ludzie"**: elektrycy, mechanicy, TL, SV albo wszyscy; supervisorzy wchodzą na tablicę ze swoimi projektami (nadzór zamiast zadania).
+- **Podgląd kolejki supervisorów** dla Installation Managera: sekcja „Czeka na Twoich supervisorów" na ekranie Zatwierdzanie — kto, w którym tygodniu i ile dni czeka na podpis. Bez przycisku zatwierdzania: to nie jest jego podpis.
+- **Potwierdzenie przed zapisem.** Zapis projektu i planu zespołu, porzucenie niezapisanych zmian, przeciągnięcie osoby na tydzień projektu, propozycja obsady, „Zaplanuj", „Przerwa" i zaznaczenie okresu pokazują listę zmian i pytają, zanim cokolwiek trafi do bazy.
+
+### Zmiany
+- **Godziny zatwierdza się raz.** Supervisor zatwierdza dni zespołu (TL, elektrycy, mechanicy) i to jest zatwierdzenie ostateczne — timesheet domyka się bez udziału Installation Managera. IM zatwierdza wyłącznie godziny swoich supervisorów. Project Manager nie zatwierdza godzin w ogóle. Szczegóły i ryzyka: ADR 0012.
+- **Installation Manager widzi wszystkie projekty firmy** — z filtrem „Moje / Innych IM / Wszystkie" i znacznikiem przy każdym projekcie, w Pulpicie, na Mapie, Osi czasu, w Strukturze i Obsadzie.
+- **Obsada ma jedną oś tygodni**, przyklejoną do góry ekranu: przy najniższym projekcie wciąż widać, od którego tygodnia zaczyna się kolumna, a moduł „Ludzie" stoi dokładnie pod projektami — tygodnie pokrywają się w pionie.
+- **Szary pasek w planie zespołu** („ta sama osoba w innym projekcie") jest teraz przyciskiem — kliknięcie otwiera tamten projekt.
+- **Panel roboczy prototypu** wygląda jak terminal (czarne tło, monospace) i chowa się sam po wybraniu osoby. Ma się odcinać od aplikacji — to rusztowanie, nie produkt.
+- **Ruch w całym interfejsie** zebrany w `src/styles/motion.css`: wejścia ekranu i kart, reakcje przycisków, kafelków dni i pasków, przejścia słupków. Ustawienie systemowe „ogranicz ruch" wyłącza wszystko.
+
+### Poprawki
+- **Okna dialogowe ucinały się na dole ekranu** i nie dało się ich przewinąć (np. „Zaproponuj obsadę" po zjechaniu na dół Obsady). Okna żyją teraz w warstwie poza przewijaną stroną i są środkowane flexem, a nie gridem — `max-height` faktycznie przycina je do ekranu.
+- **Zapis planu zespołu przepuszczał kolizje między projektami.** Plan pokazywał je na szaro, ale `saveProject` sprawdzał nachodzenie tylko wewnątrz jednego projektu. Teraz odrzuca też zadanie nachodzące na zadanie tej samej osoby w innym projekcie, z nazwą projektu i datami.
+- **„Przypisz do…" na liście ludzi** skracał tylko zadanie trwające w dniu przeprowadzki, a zadanie zaplanowane później zostawało i nachodziło na nowe. Teraz nowe zadanie kończy się dzień przed kolejnym, a gdy to niemożliwe — polecenie odmawia i mówi dlaczego.
+- Komunikaty i panele pływające (dock, podgląd osoby, potwierdzenia) nie uciekają już razem z przewijaniem strony.
+
 ## [0.6.0] - 2026-10-17
 
 ### Nowe funkcje

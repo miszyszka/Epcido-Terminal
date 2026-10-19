@@ -19,6 +19,17 @@ export interface Toast {
   action?: ToastAction;
 }
 
+/** Pytanie przed zapisem — nic nie trafia do bazy, zanim ktoś nie potwierdzi. */
+export interface ConfirmRequest {
+  title: string;
+  /** Co dokładnie się zapisze — lista zmian po ludzku */
+  lines?: string[];
+  description?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: "default" | "danger";
+}
+
 interface UiValue {
   search: string;
   setSearch: (value: string) => void;
@@ -30,6 +41,13 @@ interface UiValue {
   entryEditor: EntryRef;
   openEntry: (ref: NonNullable<EntryRef>) => void;
   closeEntry: () => void;
+  /** Podgląd osoby — otwiera się kliknięciem w imię w dowolnym widoku */
+  personId: string | null;
+  openPerson: (employeeId: string) => void;
+  closePerson: () => void;
+  confirm: (request: ConfirmRequest) => Promise<boolean>;
+  confirmState: (ConfirmRequest & { id: number }) | null;
+  resolveConfirm: (ok: boolean) => void;
   toasts: Toast[];
   toast: (message: string, tone?: Toast["tone"], action?: ToastAction) => void;
   dismissToast: (id: number) => void;
@@ -41,8 +59,11 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<EditorState>(null);
   const [entryEditor, setEntryEditor] = useState<EntryRef>(null);
+  const [personId, setPersonId] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<(ConfirmRequest & { id: number }) | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
+  const pending = useRef<((ok: boolean) => void) | null>(null);
 
   const toast = useCallback((message: string, tone: Toast["tone"] = "info", action?: ToastAction) => {
     const id = nextId.current++;
@@ -59,10 +80,63 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const closeEditor = useCallback(() => setEditor(null), []);
   const openEntry = useCallback((ref: NonNullable<EntryRef>) => setEntryEditor(ref), []);
   const closeEntry = useCallback(() => setEntryEditor(null), []);
+  const openPerson = useCallback((employeeId: string) => setPersonId(employeeId), []);
+  const closePerson = useCallback(() => setPersonId(null), []);
+
+  const confirm = useCallback((request: ConfirmRequest) => {
+    pending.current?.(false);
+    return new Promise<boolean>((resolve) => {
+      pending.current = resolve;
+      setConfirmState({ ...request, id: nextId.current++ });
+    });
+  }, []);
+  const resolveConfirm = useCallback((ok: boolean) => {
+    const resolve = pending.current;
+    pending.current = null;
+    setConfirmState(null);
+    resolve?.(ok);
+  }, []);
 
   const value = useMemo<UiValue>(
-    () => ({ search, setSearch, editor, openNewProject, openProject, closeEditor, entryEditor, openEntry, closeEntry, toasts, toast, dismissToast }),
-    [search, editor, openNewProject, openProject, closeEditor, entryEditor, openEntry, closeEntry, toasts, toast, dismissToast]
+    () => ({
+      search,
+      setSearch,
+      editor,
+      openNewProject,
+      openProject,
+      closeEditor,
+      entryEditor,
+      openEntry,
+      closeEntry,
+      personId,
+      openPerson,
+      closePerson,
+      confirm,
+      confirmState,
+      resolveConfirm,
+      toasts,
+      toast,
+      dismissToast,
+    }),
+    [
+      search,
+      editor,
+      openNewProject,
+      openProject,
+      closeEditor,
+      entryEditor,
+      openEntry,
+      closeEntry,
+      personId,
+      openPerson,
+      closePerson,
+      confirm,
+      confirmState,
+      resolveConfirm,
+      toasts,
+      toast,
+      dismissToast,
+    ]
   );
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;

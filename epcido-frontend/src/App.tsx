@@ -1,10 +1,12 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { PanelLeftOpen } from "lucide-react";
+import { Terminal } from "lucide-react";
 import { DataProvider, useData, useUser } from "./app/DataContext";
 import { SessionProvider, useSession } from "./app/SessionContext";
 import { UiProvider } from "./app/UiContext";
+import { ConfirmHost } from "./components/ConfirmDialog";
 import { DevPanel } from "./components/DevPanel";
 import { Dock } from "./components/Dock";
+import { PersonSheetHost } from "./components/PersonSheet";
 import { DataGate } from "./components/StateScreens";
 import { Toasts } from "./components/Toasts";
 import { TooltipLayer } from "./components/TooltipLayer";
@@ -45,6 +47,10 @@ export default function App() {
  * Układ: po lewej panel roboczy (prototyp), po prawej aplikacja.
  * Aplikacja żyje w ramce (.app-frame), więc podgląd mobilny to ta sama aplikacja w węższej ramce —
  * style reagują na szerokość ramki (container queries), a nie okna przeglądarki.
+ *
+ * Warstwa `#epcido-overlay` leży w ramce, ale poza przewijaniem (.app-scroll): okna dialogowe,
+ * podgląd osoby i komunikaty są dzięki temu zawsze na środku widocznego ekranu, nawet gdy strona
+ * pod spodem jest zjechana na sam dół.
  */
 function Layout() {
   const { preview, panelOpen, setPanelOpen } = useSession();
@@ -59,11 +65,14 @@ function Layout() {
             <AppRoutes />
           </main>
         </div>
-        <Dock />
-        {model && user && <ProjectEditor />}
-        {model && user && <EntryDialogHost />}
-        <Toasts />
       </div>
+      <Dock />
+      <div className="overlay-layer" id="epcido-overlay" />
+      {model && user && <ProjectEditor />}
+      {model && user && <EntryDialogHost />}
+      {model && user && <PersonSheetHost />}
+      <ConfirmHost />
+      <Toasts />
     </div>
   );
 
@@ -73,7 +82,7 @@ function Layout() {
         <DevPanel />
       ) : (
         <button type="button" className="devpanel-tab" onClick={() => setPanelOpen(true)} aria-label="Pokaż panel roboczy">
-          <PanelLeftOpen size={18} aria-hidden />
+          <Terminal size={16} aria-hidden />
           <span>Panel roboczy</span>
         </button>
       )}

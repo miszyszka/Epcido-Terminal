@@ -4,7 +4,8 @@ import { useData, useModel, useUser } from "../../app/DataContext";
 import { Dialog } from "../../components/Dialog";
 import { Field, TextInput } from "../../components/Field";
 import { PageHeader } from "../../components/PageHeader";
-import { EmploymentTag, PositionMark } from "../../components/PersonBadge";
+import { EmploymentTag } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
 import { Segmented } from "../../components/Segmented";
 import { SelectMenu } from "../../components/SelectMenu";
 import type { UserInput } from "../../data/commands";
@@ -97,11 +98,8 @@ export function UsersView() {
                 <tr key={e.id} className={e.active === false ? "is-off" : ""}>
                   <th scope="row">
                     <span className="person-cell">
-                      <PositionMark employee={e} />
-                      <span className="user-cell">
-                        <span>{e.name}</span>
-                        {e.email && <small>{e.email}</small>}
-                      </span>
+                      <PersonLink employee={e} />
+                      {e.email && <small className="user-cell__mail">{e.email}</small>}
                     </span>
                   </th>
                   <td className="muted">

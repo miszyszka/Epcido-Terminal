@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useData, useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
@@ -27,7 +27,7 @@ function EditorInner({ projectId, initialTab, focus }: { projectId: string | nul
   const model = useModel();
   const user = useUser();
   const data = useData();
-  const { closeEditor, openProject } = useUi();
+  const { closeEditor, openProject, confirm } = useUi();
   const project = projectId ? model.projectById.get(projectId) : undefined;
 
   const [values, setValues] = useState<ProjectInput>(() =>
@@ -74,20 +74,76 @@ function EditorInner({ projectId, initialTab, focus }: { projectId: string | nul
     return fieldsChanged || teamChanged;
   }, [project, values, draft, model.assignmentsByProject]);
 
+  /** Wyjście z edytora: niezapisane zmiany nie znikają bez pytania. */
+  const leave = useCallback(async () => {
+    if (project && dirty) {
+      const ok = await confirm({
+        title: "Porzucić niezapisane zmiany?",
+        lines: ["Plan i dane projektu wrócą do stanu zapisanego w bazie."],
+        confirmLabel: "Porzuć zmiany",
+        cancelLabel: "Wróć do edycji",
+        tone: "danger",
+      });
+      if (!ok) return;
+    }
+    closeEditor();
+  }, [project, dirty, confirm, closeEditor]);
+
   useEffect(() => {
     root.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !document.querySelector(".popover, .dialog")) closeEditor();
+      if (e.key === "Escape" && !document.querySelector(".popover, .dialog, .psheet")) void leave();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [closeEditor]);
+  }, [leave]);
 
   const set = <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => setValues((v) => ({ ...v, [key]: value }));
+
+  /** Co dokładnie zmieni zapis — planista potwierdza to przed dotknięciem bazy. */
+  const changeLines = useMemo(() => {
+    if (!project) return [`Nowy projekt: ${values.name || "bez nazwy"}`, `Zespół w planie: ${new Set(draft.map((d) => d.employeeId)).size} os.`];
+    const lines: string[] = [];
+    const original = projectToInput(project);
+    const fields: [keyof ProjectInput, string][] = [
+      ["name", "nazwa"],
+      ["number", "numer"],
+      ["startDate", "start"],
+      ["endDate", "koniec"],
+      ["status", "status"],
+      ["category", "kategoria"],
+      ["branch", "oddział"],
+      ["supervisorId", "supervisor"],
+      ["installationManagerId", "Installation Manager"],
+      ["projectManagerId", "Project Manager"],
+      ["demand", "zapotrzebowanie"],
+    ];
+    for (const [key, label] of fields) {
+      if (JSON.stringify(original[key] ?? "") !== JSON.stringify(values[key] ?? "")) lines.push(`Zmiana: ${label}`);
+    }
+    const existing = model.assignmentsByProject.get(project.id) ?? [];
+    const added = draft.filter((d) => !d.id).length;
+    const removed = existing.filter((a) => !draft.some((d) => d.id === a.id)).length;
+    const moved = draft.filter((d) => {
+      const a = existing.find((x) => x.id === d.id);
+      return a && (a.from !== d.from || (a.to ?? null) !== (d.to ?? null) || (a.task ?? null) !== (d.task ?? null));
+    }).length;
+    if (added) lines.push(`Nowe zadania w planie: ${added}`);
+    if (moved) lines.push(`Zmienione zadania: ${moved}`);
+    if (removed) lines.push(`Usunięte z planu: ${removed}`);
+    return lines.length ? lines : ["Bez widocznych zmian"];
+  }, [project, values, draft, model.assignmentsByProject]);
 
   async function save() {
     setAttempted(true);
     if (Object.keys(validateProject(values, model.snapshot, projectId)).length > 0) return;
+    const ok = await confirm({
+      title: project ? `Zapisać zmiany w ${project.name}?` : "Utworzyć projekt?",
+      description: project ? "Zmiany zobaczą od razu wszyscy — także zespół w terenie." : undefined,
+      lines: changeLines,
+      confirmLabel: project ? "Zapisz zmiany" : "Utwórz projekt",
+    });
+    if (!ok) return;
     setSaving(true);
     const id = await data.saveProject(projectId, values, draft);
     setSaving(false);
@@ -112,7 +168,7 @@ function EditorInner({ projectId, initialTab, focus }: { projectId: string | nul
   return (
     <div className="editor" role="dialog" aria-modal="true" aria-label={project ? project.name : "Nowy projekt"} tabIndex={-1} ref={root}>
       <header className="editor__bar">
-        <button type="button" className="btn btn--quiet" onClick={closeEditor}>
+        <button type="button" className="btn btn--quiet" onClick={() => void leave()}>
           <ArrowLeft size={18} aria-hidden />
           Wróć
         </button>
@@ -128,7 +184,7 @@ function EditorInner({ projectId, initialTab, focus }: { projectId: string | nul
           {project && dirty && <span className="editor__unsaved">Niezapisane zmiany</span>}
         </div>
         <div className="editor__actions">
-          <button type="button" className="btn btn--quiet" onClick={closeEditor}>
+          <button type="button" className="btn btn--quiet" onClick={() => void leave()}>
             {editable ? "Anuluj" : "Zamknij"}
           </button>
           {editable && (
