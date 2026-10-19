@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useData, useModel } from "../../app/DataContext";
+import { useUi } from "../../app/UiContext";
 import { DatePicker } from "../../components/DatePicker";
 import { Dialog } from "../../components/Dialog";
 import { Field } from "../../components/Field";
@@ -13,6 +14,7 @@ const LENGTHS = [7, 10, 14];
 export function BreakDialog({ outlook: o, onClose }: { outlook: PersonOutlook; onClose: () => void }) {
   const model = useModel();
   const data = useData();
+  const { confirm } = useUi();
   const today = todayISO();
   const [from, setFrom] = useState<ISODate>(addDays(startOfWeek(today), 14));
   const [days, setDays] = useState(7);
@@ -41,6 +43,16 @@ export function BreakDialog({ outlook: o, onClose }: { outlook: PersonOutlook; o
             disabled={!target || saving}
             onClick={async () => {
               if (!target) return;
+              const agreed = await confirm({
+                title: "Wstawić przerwę?",
+                lines: [
+                  `${o.employee.name} — ${days} dni w domu`,
+                  `Od ${formatDate(from)}, wraca ${formatDate(addDays(from, days))}`,
+                  `Zadanie w ${project?.name ?? "projekcie"} zostanie podzielone na dwa.`,
+                ],
+                confirmLabel: "Wstaw przerwę",
+              });
+              if (!agreed) return;
               setSaving(true);
               const ok = await data.insertBreak({ assignmentId: target.id, from, days });
               setSaving(false);

@@ -59,6 +59,24 @@ export function nextExportAfter(t: Date): Date {
   return d < t ? new Date(d.getTime() + 7 * 86_400_000) : d;
 }
 
+/**
+ * Kto domyka dzień danej osoby w projekcie (ADR 0012):
+ *  - zespół (TL, elektryk, mechanik) — supervisor projektu i to jest zatwierdzenie ostateczne,
+ *  - sam supervisor — Installation Manager projektu (nikt nie zatwierdza własnych godzin).
+ * Project Manager nie zatwierdza godzin w ogóle.
+ */
+export function finalLevelFor(project: Project, employeeId: string): QueueLevel {
+  return employeeId === project.supervisorId ? "final" : "team";
+}
+
+/** Dzień zamknięty do końca: zatwierdzony przez właściwą osobę albo już wysłany do Dataverse. */
+export function isComplete(project: Project, employeeId: string, entry: DayEntry | undefined): boolean {
+  if (!entry) return false;
+  if (entry.exported || entry.status === "PM_APPROVED") return true;
+  return entry.status === "SUPERVISOR_APPROVED" && finalLevelFor(project, employeeId) === "team";
+}
+
+/** Wysłane albo zatwierdzone na najwyższym poziomie — bez wiedzy, czyj to dzień. */
 export function isFinal(entry: DayEntry | undefined): boolean {
   return Boolean(entry && (entry.exported || entry.status === "PM_APPROVED"));
 }
@@ -149,20 +167,19 @@ export function approvedStatus(level: QueueLevel): EntryStatus {
   return level === "team" ? "SUPERVISOR_APPROVED" : "PM_APPROVED";
 }
 
-/** Na jakim poziomie ta osoba zatwierdza ten wpis (null = nie zatwierdza). */
+/**
+ * Na jakim poziomie ta osoba zatwierdza ten wpis (null = nie zatwierdza).
+ * Zespół zatwierdza supervisor projektu — ostatecznie. Godziny samego supervisora zatwierdza
+ * Installation Manager projektu. Administrator może wszystko. Project Manager — nic.
+ */
 export function approvalLevel(project: Project, user: Employee, employeeId: string, entry: DayEntry | undefined): QueueLevel | null {
-  if (!entry || isFinal(entry)) return null;
+  if (!entry || isComplete(project, employeeId, entry)) return null;
   const isAdmin = can(user, "hours.approveAll");
-  const isSv = project.supervisorId === user.id && can(user, "hours.approveTeam");
+  const isSv = project.supervisorId === user.id && employeeId !== user.id && can(user, "hours.approveTeam");
   const isIm = project.installationManagerId === user.id && can(user, "hours.approveFinal");
-  const ofSupervisor = employeeId === project.supervisorId;
-  if (entry.status === "SUBMITTED") {
-    if (ofSupervisor) return isIm || isAdmin ? "final" : null;
-    if (isSv) return "team";
-    return isAdmin ? "final" : null;
-  }
-  if (entry.status === "SUPERVISOR_APPROVED") return isIm || isAdmin ? "final" : null;
-  return null;
+  if (finalLevelFor(project, employeeId) === "final") return isIm || isAdmin ? "final" : null;
+  if (isSv) return "team";
+  return isAdmin ? "team" : null;
 }
 
 export interface QueueItem {
@@ -204,6 +221,42 @@ export function queueFor(model: Model, user: Employee, now: Date): QueueItem[] {
     }
   }
   return items.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Dni jednej osoby czekające na podpis supervisora — wiersz podglądu dla Installation Managera. */
+export interface OversightRow {
+  key: string;
+  supervisorId: string | null;
+  projectId: string;
+  week: ISODate;
+  employeeId: string;
+  dates: ISODate[];
+}
+
+/**
+ * Czego jeszcze nie zatwierdzili supervisorzy w projektach tej osoby. Installation Manager tego
+ * nie klika — ma widzieć, gdzie stoi podpis, i wiedzieć, kogo pogonić przed terminem.
+ */
+export function supervisorOversight(model: Model, user: Employee, now: Date): OversightRow[] {
+  const isAdmin = can(user, "hours.approveAll");
+  const rows = new Map<string, OversightRow>();
+  for (const project of model.projects) {
+    if (!isAdmin && project.installationManagerId !== user.id) continue;
+    for (const [employeeId, days] of model.entries.get(project.id) ?? []) {
+      if (finalLevelFor(project, employeeId) !== "team") continue;
+      for (const [date, entry] of days) {
+        if (isComplete(project, employeeId, entry) || isWeekClosed(date, now)) continue;
+        const week = startOfWeek(date);
+        const key = `${project.id}|${week}|${employeeId}`;
+        const row = rows.get(key) ?? { key, supervisorId: project.supervisorId, projectId: project.id, week, employeeId, dates: [] };
+        row.dates.push(date);
+        rows.set(key, row);
+      }
+    }
+  }
+  return [...rows.values()]
+    .map((r) => ({ ...r, dates: r.dates.sort() }))
+    .sort((a, b) => b.week.localeCompare(a.week) || a.projectId.localeCompare(b.projectId) || a.employeeId.localeCompare(b.employeeId));
 }
 
 /** Liczba timesheetów (projekt × tydzień) wśród pozycji. */
@@ -288,11 +341,15 @@ export const timesheetsNom = (n: number) => `${n} ${plural(n, "timesheet", "time
 export interface SupervisorStats {
   supervisor: Employee;
   projectIds: string[];
-  /** Timesheety, w których supervisor ma coś do zatwierdzenia (przed terminem) */
+  /** Timesheety, w których supervisor ma coś do zatwierdzenia zespołowi (przed terminem) */
   pending: number;
+  /** Dni zespołu czekające na podpis supervisora — podgląd dla IM */
+  pendingDays: number;
+  /** Ile osób z zespołu czeka na podpis supervisora */
+  pendingPeople: number;
   /** Wstrzymane timesheety w projektach supervisora — nie wysłane do Dataverse */
   missed: number;
-  /** Timesheety z dniami zatwierdzonymi przez supervisora (i jego własnymi), które czekają na IM */
+  /** Timesheety z własnymi godzinami supervisora, które czekają na IM */
   awaitingFinal: number;
   /** Bieżący tydzień: wpisy zespołu i ile z nich zatwierdzono */
   weekTotal: number;
@@ -305,6 +362,7 @@ export function supervisorStats(model: Model, supervisor: Employee, now: Date): 
   const weekStart = startOfWeek(today);
   const pending: { projectId: string; date: ISODate }[] = [];
   const awaiting: typeof pending = [];
+  const pendingPeople = new Set<string>();
   let weekTotal = 0;
   let weekApproved = 0;
   for (const p of projects) {
@@ -312,7 +370,7 @@ export function supervisorStats(model: Model, supervisor: Employee, now: Date): 
       const own = employeeId === supervisor.id;
       for (const [date, entry] of days) {
         const inWeek = !own && date >= weekStart && date <= today;
-        if (isFinal(entry)) {
+        if (isComplete(p, employeeId, entry)) {
           if (inWeek) {
             weekTotal++;
             weekApproved++;
@@ -321,12 +379,11 @@ export function supervisorStats(model: Model, supervisor: Employee, now: Date): 
         }
         if (isWeekClosed(date, now)) continue;
         const ref = { projectId: p.id, date };
-        if (!own && entry.status === "SUBMITTED") pending.push(ref);
-        if (entry.status === "SUPERVISOR_APPROVED" || (own && entry.status === "SUBMITTED")) awaiting.push(ref);
-        if (inWeek) {
-          weekTotal++;
-          if (entry.status === "SUPERVISOR_APPROVED") weekApproved++;
-        }
+        if (!own) {
+          pending.push(ref);
+          pendingPeople.add(employeeId);
+        } else awaiting.push(ref);
+        if (inWeek) weekTotal++;
       }
     }
   }
@@ -334,6 +391,8 @@ export function supervisorStats(model: Model, supervisor: Employee, now: Date): 
     supervisor,
     projectIds: projects.map((p) => p.id),
     pending: countTimesheets(pending),
+    pendingDays: pending.length,
+    pendingPeople: pendingPeople.size,
     missed: sheetsFor(model, now).withheld(projects.map((p) => p.id)).length,
     awaitingFinal: countTimesheets(awaiting),
     weekTotal,
@@ -384,13 +443,17 @@ export function editRight(
     if (!seesDispatch(user)) return NO("Tydzień zamknięty.");
     if (sheet?.status === "sent") return NO("Timesheet wysłany do Dataverse — nienaruszalny.");
     if (sheet?.status === "closed") return NO(`Timesheet zamknięty i kompletny — wysyłka ${formatDay(toISO(sheet.sentAt!))}, ${exportTime()}.`);
-    if (can(user, "hours.fixWithheld")) return { can: true, reason: null, asApprover: true, level: level ?? "final" };
+    if (can(user, "hours.fixWithheld")) return { can: true, reason: null, asApprover: true, level: level ?? finalLevelFor(project, employeeId) };
     return NO(WITHHELD_MESSAGE);
   }
 
   const isSv = project.supervisorId === user.id && employeeId !== user.id && can(user, "hours.approveTeam");
-  const isIm = project.installationManagerId === user.id && can(user, "hours.approveFinal");
+  // IM wchodzi w dzień tylko tam, gdzie sam podpisuje — czyli w godziny swojego supervisora
+  const isIm =
+    project.installationManagerId === user.id && can(user, "hours.approveFinal") && finalLevelFor(project, employeeId) === "final";
   if (isAdmin || isSv || isIm) return { can: true, reason: null, asApprover: true, level };
+  if (project.installationManagerId === user.id && can(user, "hours.approveFinal"))
+    return NO("Godziny zespołu zatwierdza supervisor projektu — tutaj tylko podgląd.");
   if (employeeId === user.id && can(user, "hours.own")) {
     if (entry && entry.status !== "SUBMITTED") return NO("Zatwierdzone — zmiany wprowadza supervisor.");
     const assigned =

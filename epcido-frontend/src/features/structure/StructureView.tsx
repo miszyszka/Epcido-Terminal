@@ -1,7 +1,9 @@
 import { useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { PageHeader } from "../../components/PageHeader";
-import { PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { ProjectDot } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
+import { ScopeFilter, useScope } from "../../components/ScopeFilter";
 import type { Employee } from "../../domain/types";
 import { can, canEditProject, visibleProjects as allowedProjects } from "../../domain/permissions";
 import { todayISO } from "../../lib/dates";
@@ -13,8 +15,9 @@ export function StructureView() {
   const user = useUser();
   const { openProject } = useUi();
   const today = todayISO();
+  const scope = useScope(model, user);
   const allowed = new Set(allowedProjects(model, user).map((p) => p.id));
-  const scoped = model.projects.filter((p) => allowed.has(p.id));
+  const scoped = model.projects.filter((p) => allowed.has(p.id) && scope.pass(p));
   const ims = model.employees.filter((e) => e.position === "INSTALLATION_MANAGER" && scoped.some((p) => p.installationManagerId === e.id));
   const orphanProjects = scoped.filter((p) => !p.installationManagerId);
   const bench = model.employees.filter(
@@ -32,7 +35,7 @@ export function StructureView() {
 
   return (
     <div className="page">
-      <PageHeader title="Struktura zespołów" />
+      <PageHeader title="Struktura zespołów" actions={<ScopeFilter scope={scope} />} />
 
       <div className="org">
         {ims.map((im) => {
@@ -41,10 +44,12 @@ export function StructureView() {
           const people = teams.reduce((n, t) => n + t.members.length + (t.supervisor ? 1 : 0), 0);
           return (
             <section key={im.id} className="org-col" aria-label={im.name}>
-              <div className="org-node org-node--im">
-                <PositionMark employee={im} />
+              <div className={`org-node org-node--im ${im.id === user.id ? "is-me" : ""}`}>
                 <div>
-                  <strong>{im.name}</strong>
+                  <strong>
+                    <PersonLink employee={im} />
+                    {im.id === user.id && <span className="scope-mark is-mine">moje</span>}
+                  </strong>
                   <span className="org-node__meta">
                     {projectsCount(projectIds.length)}, {peopleCount(people)}
                   </span>
@@ -60,10 +65,7 @@ export function StructureView() {
                     </button>
                     <div className="org-sv">
                       {t.supervisor ? (
-                        <>
-                          <PositionMark employee={t.supervisor} />
-                          <span>{t.supervisor.name}</span>
-                        </>
+                        <PersonLink employee={t.supervisor} />
                       ) : (
                         <button type="button" className="btn btn--quiet btn--sm" onClick={() => open(t.project.id)}>
                           Wybierz supervisora
@@ -140,8 +142,7 @@ function TeamGroup({ label, people }: { label: string; people: Employee[] }) {
       <ul className="team-group__list">
         {people.map((p) => (
           <li key={p.id}>
-            <PositionMark employee={p} />
-            <span>{p.name}</span>
+            <PersonLink employee={p} />
           </li>
         ))}
       </ul>

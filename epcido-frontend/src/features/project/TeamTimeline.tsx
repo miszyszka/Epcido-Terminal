@@ -1,9 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Scissors, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import { Scissors, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
 import { useModel } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { DatePicker } from "../../components/DatePicker";
-import { EmploymentTag, PositionMark } from "../../components/PersonBadge";
+import { EmploymentTag } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
 import type { DraftAssignment } from "../../data/commands";
 import { defaultTask, TASK_SUGGESTIONS } from "../../domain/labels";
 import { needOf } from "../../domain/staffing";
@@ -24,7 +25,12 @@ import {
 import { newId } from "../../lib/random";
 import { daysCount } from "../../lib/text";
 
+import { PeopleBoard } from "../staffing/PeopleBoard";
+
 const DAY = 24;
+/** Panel „Ludzie" pod planem: ile tygodni i jak szeroki tydzień. */
+const PANEL_WEEKS_COUNT = 12;
+const PANEL_COL = 56;
 /** Kolumna nazwisk: mieści pełne imię i nazwisko w dwóch liniach (tokens: --plan-name) */
 const NAME_W = 300;
 /** Oś sięga tyle tygodni za najdalej zaplanowane zadanie (≈ 3 miesiące). */
@@ -57,12 +63,13 @@ type DragMode = "move" | "start" | "end";
  */
 export function TeamTimeline({ projectId, start, end, supervisorId, draft, onChange, editable, onAssign, demand = [], onPropose }: TeamTimelineProps) {
   const model = useModel();
-  const { toast } = useUi();
+  const { toast, openProject } = useUi();
   const today = todayISO();
   const scroller = useRef<HTMLDivElement>(null);
   const drag = useRef<{ key: string; mode: DragMode; x: number; from: ISODate; to: ISODate; moved: boolean } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [people, setPeople] = useState(false);
 
   // Początek osi ustalony przy otwarciu (stabilne przeciąganie), cofa się tylko, gdy start projektu jest wcześniej
   const [initialStart] = useState(() => {
@@ -180,6 +187,10 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
     setSelected(key);
   };
 
+  const panelWeeks = useMemo(
+    () => Array.from({ length: PANEL_WEEKS_COUNT }, (_, i) => addDays(startOfWeek(today), i * 7)),
+    [today]
+  );
   const months = monthSpans(days);
   const weekendBg = `repeating-linear-gradient(90deg, transparent 0 ${5 * DAY}px, var(--sand-50) ${5 * DAY}px ${7 * DAY}px)`;
   const cutoffBg = `repeating-linear-gradient(90deg, transparent 0 ${DAY - 1}px, var(--cutoff) ${DAY - 1}px ${DAY + 0.5}px, transparent ${DAY + 0.5}px ${7 * DAY}px)`;
@@ -207,6 +218,10 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
         </div>
         {editable && (
           <div className="plan__actions">
+            <button type="button" className={`btn btn--quiet ${people ? "is-active" : ""}`} onClick={() => setPeople((v) => !v)} aria-pressed={people}>
+              <Users size={17} aria-hidden />
+              Ludzie
+            </button>
             {onPropose && (
               <button type="button" className="btn btn--secondary" onClick={onPropose}>
                 <Sparkles size={17} aria-hidden />
@@ -322,12 +337,9 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
           <div className="plan__row">
           <div className="plan__name">
             {supervisor ? (
-              <>
-                <PositionMark employee={supervisor} />
-                <span className="plan__who">
-                  <span className="plan__person">{supervisor.name}</span>
-                </span>
-              </>
+              <span className="plan__who">
+                <PersonLink employee={supervisor} className="plan__person" />
+              </span>
             ) : (
               <span className="muted">Supervisor nie wybrany</span>
             )}
@@ -366,11 +378,8 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
                 return (
                   <div className="plan__row" key={employee.id}>
                     <div className="plan__name">
-                      <PositionMark employee={employee} />
                       <span className="plan__who">
-                        <span className="plan__person" title={employee.name}>
-                          {employee.name}
-                        </span>
+                        <PersonLink employee={employee} className="plan__person" />
                         <span className="plan__meta">
                           <EmploymentTag employee={employee} />
                           {bars.length > 1 && <em className="plan__count">{bars.length} zadania</em>}
@@ -396,14 +405,20 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
                         const p = model.projectById.get(o.projectId);
                         if (!s || !p) return null;
                         return (
-                          <span
+                          <button
                             key={o.id}
+                            type="button"
                             className="bar bar--ghost"
                             style={{ left: s.left, width: s.width, ["--project" as string]: p.color }}
-                            data-tip={`${p.name}${o.task ? ` · ${o.task}` : ""}: ${formatDate(o.from)} – ${o.to ? formatDate(o.to) : "koniec projektu"}`}
+                            data-tip={`${p.name}${o.task ? ` · ${o.task}` : ""}: ${formatDate(o.from)} – ${o.to ? formatDate(o.to) : "koniec projektu"}\nKliknij, żeby otworzyć ten projekt`}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openProject(o.projectId, "team", true);
+                            }}
                           >
                             <span className="bar__label">{p.name}</span>
-                          </span>
+                          </button>
                         );
                       })}
                       {bars.slice(1).map((bar, i) => {
@@ -494,9 +509,27 @@ export function TeamTimeline({ projectId, start, end, supervisorId, draft, onCha
       </div>
       <p className="plan__hint">
         {editable
-          ? "Kliknij zadanie, żeby zmienić nazwę, daty albo wstawić przerwę. Przeciągnij, żeby przesunąć; chwyć za brzeg, żeby zmienić start lub koniec. Kliknij puste miejsce w wierszu, żeby dodać osobie kolejne zadanie. Szare paski to ta sama osoba w innych projektach."
+          ? "Kliknij zadanie, żeby zmienić nazwę, daty albo wstawić przerwę. Przeciągnij, żeby przesunąć; chwyć za brzeg, żeby zmienić start lub koniec. Kliknij puste miejsce w wierszu, żeby dodać osobie kolejne zadanie. Szare paski to ta sama osoba w innym projekcie — kliknij, żeby tam przejść."
           : "Plan zespołu ustala Planning. Tutaj widzisz, kto i kiedy pracuje w projekcie i gdzie ma przerwy."}
       </p>
+
+      {people && (
+        <section className="pboard-panel" aria-label="Ludzie dostępni w tym okresie">
+          <div className="pboard-panel__head">
+            <h3>Ludzie</h3>
+            <p className="muted">Kto jest wolny w kolejnych tygodniach. Zaznacz okres na pasku osoby, żeby dopisać ją do tego projektu.</p>
+          </div>
+          <PeopleBoard
+            from={startOfWeek(today)}
+            weeks={panelWeeks}
+            col={PANEL_COL}
+            variant="project"
+            editable={editable}
+            defaultProjectId={projectId}
+            inPlan={new Set(draft.map((d) => d.employeeId))}
+          />
+        </section>
+      )}
     </div>
   );
 }
@@ -537,8 +570,7 @@ function TaskPanel({
   return (
     <section className="plan__task" aria-label={`Zadanie: ${employee.name}`}>
       <div className="plan__task-who">
-        <PositionMark employee={employee} />
-        <strong>{employee.name}</strong>
+        <PersonLink employee={employee} />
       </div>
       <label className="plan__task-field plan__task-field--name">
         <span>Zadanie</span>

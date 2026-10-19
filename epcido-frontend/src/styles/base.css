@@ -117,6 +117,22 @@ body {
   overflow: auto;
   container: app / inline-size;
   overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+/*
+ * Warstwa okien: w ramce aplikacji, ale poza przewijaniem. Okna dialogowe, podgląd osoby
+ * i potwierdzenia trafiają tu przez portal, więc zawsze stoją na środku widocznego ekranu —
+ * wcześniej liczyły się względem przewijanej treści i po zjechaniu w dół uciekały poza ekran.
+ */
+.overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 65;
+  container: app / inline-size;
+  pointer-events: none;
+}
+.overlay-layer > * {
+  pointer-events: auto;
 }
 .device {
   display: flex;
@@ -240,13 +256,4 @@ body {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
+/* Reguła ograniczonego ruchu jest w motion.css — musi być ostatnia w kaskadzie. */

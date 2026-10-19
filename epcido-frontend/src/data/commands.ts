@@ -147,6 +147,23 @@ export function saveProject(
       }
     }
   }
+  // …ani na zadania tej samej osoby w innych projektach. Nikt nie pracuje w dwóch miejscach naraz,
+  // a plan zespołu pokazuje te kolizje na szaro — zapis nie może ich przepuścić po cichu.
+  const projectEndOf = (projectId: string) => snapshot.projects.find((p) => p.id === projectId)?.endDate ?? "9999-12-31";
+  // Zadanie bez daty końca trwa do końca projektu — liczymy po nowej dacie, nie po zapisanej
+  const draftEnd = (d: DraftAssignment) => d.to ?? args.input.endDate ?? "9999-12-31";
+  for (const d of args.team) {
+    const clash = snapshot.assignments.find(
+      (a) => a.employeeId === d.employeeId && a.projectId !== args.id && a.from <= draftEnd(d) && (a.to ?? projectEndOf(a.projectId)) >= d.from
+    );
+    if (clash) {
+      const who = snapshot.employees.find((e) => e.id === d.employeeId)?.name ?? "Osoba";
+      const where = snapshot.projects.find((p) => p.id === clash.projectId)?.name ?? "innym projekcie";
+      throw new CommandError(
+        `${who} ma w tym czasie zadanie w ${where} (${formatDate(clash.from)} – ${clash.to ? formatDate(clash.to) : "koniec projektu"}). Skróć jedno z zadań.`
+      );
+    }
+  }
 
   const now = new Date().toISOString();
   const writes: Write[] = [];
@@ -220,17 +237,36 @@ export function assignToProject(snapshot: Snapshot, actor: Actor, employeeId: st
   if (!project || !employee) throw new CommandError("Nie znaleziono projektu lub osoby.");
   const from = project.startDate > today ? project.startDate : today;
   const writes: Write[] = [];
-  const active = snapshot.assignments.filter((a) => a.employeeId === employeeId && (!a.to || a.to >= from) && a.from <= from);
-  for (const a of active) {
+  const mine = snapshot.assignments.filter((a) => a.employeeId === employeeId);
+  // Trwające zadania kończymy dniem przed przeprowadzką
+  for (const a of mine.filter((a) => a.from <= from && (!a.to || a.to >= from))) {
     if (a.projectId === projectId) throw new CommandError(`${employee.name} jest już w tym zespole.`);
     const end = addDays(from, -1);
     writes.push(end < a.from ? { collection: "assignments", id: a.id, data: null } : { collection: "assignments", id: a.id, data: strip({ ...a, to: end }) });
   }
-  const a: Assignment = { id: newId("a"), projectId, employeeId, from, to: project.endDate, task: defaultTask(employee.trade) };
+  // …a nowe zadanie nie może wjechać w zadanie, które osoba ma już zaplanowane dalej
+  const nextStart = mine.filter((a) => a.from > from).sort((x, y) => x.from.localeCompare(y.from))[0]?.from ?? null;
+  let to = project.endDate;
+  if (nextStart) {
+    const limit = addDays(nextStart, -1);
+    if (limit < from) {
+      const where = snapshot.projects.find((p) => p.id === mine.find((a) => a.from === nextStart)!.projectId)?.name ?? "innym projekcie";
+      throw new CommandError(`${employee.name} zaczyna ${formatDate(nextStart)} w ${where}. Najpierw przesuń tamto zadanie.`);
+    }
+    if (!to || limit < to) to = limit;
+  }
+  const a: Assignment = { id: newId("a"), projectId, employeeId, from, to, task: defaultTask(employee.trade) };
   writes.push({ collection: "assignments", id: a.id, data: strip(a) });
   return {
     writes,
-    audit: [audit(actor, "MEMBER_ASSIGNED", projectId, `Przypisano ${employee.name} do ${project.name} od ${formatDate(from)}`)],
+    audit: [
+      audit(
+        actor,
+        "MEMBER_ASSIGNED",
+        projectId,
+        `Przypisano ${employee.name} do ${project.name}: ${formatDate(from)} – ${to ? formatDate(to) : "koniec projektu"}`
+      ),
+    ],
   };
 }
 

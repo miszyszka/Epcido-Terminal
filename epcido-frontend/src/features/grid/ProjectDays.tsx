@@ -2,7 +2,7 @@ import { useModel, useUser, type Row } from "../../app/DataContext";
 import { useNow } from "../../app/hooks";
 import { useUi } from "../../app/UiContext";
 import { DayCard, DayCell } from "../../components/DayCell";
-import { PositionMark } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
 import type { Project } from "../../domain/types";
 import { cellView, sheetsFor } from "../../domain/timesheets";
 import { approvalNote, describeHours, editRight } from "../../domain/workflow";
@@ -55,8 +55,7 @@ export function ProjectDays({ project, rows, days, today, variant, hideHead }: P
           return (
             <tr key={employee.id}>
               <th scope="row" className="days__person">
-                <PositionMark employee={employee} />
-                <span className="days__name">{employee.name}</span>
+                <PersonLink employee={employee} className="days__name" />
               </th>
               {days.map((d) => {
                 const inPeriod = periods.some((p) => p.from <= d && (!p.to || p.to >= d)) && d >= project.startDate;

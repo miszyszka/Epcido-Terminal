@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useData, useModel } from "../../app/DataContext";
+import { useUi } from "../../app/UiContext";
 import { DatePicker } from "../../components/DatePicker";
 import { Dialog } from "../../components/Dialog";
 import { Field, TextInput } from "../../components/Field";
@@ -32,6 +33,7 @@ export function PlanNextDialog({
 }) {
   const model = useModel();
   const data = useData();
+  const { confirm } = useUi();
   const today = todayISO();
   const chainEnd = o.chain && !o.chain.to.startsWith("9999") ? o.chain.to : null;
   const lastDay = o.releaseDate ?? (o.chain ? chainEnd : addDays(today, -1));
@@ -88,6 +90,16 @@ export function PlanNextDialog({
             disabled={!projectId || saving}
             onClick={async () => {
               if (!projectId) return;
+              const agreed = await confirm({
+                title: "Zapisać plan?",
+                lines: [
+                  `${o.employee.name} → ${chosen?.project.name ?? "projekt"}`,
+                  `${task.trim() || defaultTask(o.employee.trade)}: ${formatDate(from)} – ${to ? formatDate(to) : "koniec projektu"}`,
+                  ...(realBreak > 0 ? [`Wcześniej przerwa: ${realBreak} dni`] : []),
+                ],
+                confirmLabel: "Zapisz plan",
+              });
+              if (!agreed) return;
               setSaving(true);
               const ok = await data.planAssignment({ employeeId: o.employee.id, projectId, from, to, task, breakDays: realBreak > 0 ? realBreak : undefined });
               setSaving(false);

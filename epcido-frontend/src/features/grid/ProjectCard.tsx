@@ -5,7 +5,9 @@ import { useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { useNow } from "../../app/hooks";
 import { MissedMark } from "../../components/DayCell";
-import { CategoryTag, PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { CategoryTag, ProjectDot } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
+import { ProjectScopeMark, type Scope } from "../../components/ScopeFilter";
 import { projectStats } from "../../domain/aggregate";
 import { PROJECT_STATUS_LABEL } from "../../domain/labels";
 import { timesheetsNom } from "../../domain/workflow";
@@ -27,10 +29,12 @@ interface ProjectCardProps {
   hideDaysHead?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Podział „moje / innych IM" — pokazywany tylko tam, gdzie ma sens */
+  scope?: Scope | null;
 }
 
 /** Karta projektu: nagłówek z liczbami + siatka dni. Ta sama na mapie i osi czasu. */
-export function ProjectCard({ project, days, today, variant, only, collapsed, onToggle, hideDaysHead }: ProjectCardProps) {
+export function ProjectCard({ project, days, today, variant, only, collapsed, onToggle, hideDaysHead, scope = null }: ProjectCardProps) {
   const model = useModel();
   const user = useUser();
   const { openProject } = useUi();
@@ -72,6 +76,7 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
           </button>
           <span className="pcard__number">{project.number}</span>
           <CategoryTag category={project.category} />
+          {scope && <ProjectScopeMark scope={scope} project={project} />}
         </div>
         <div className="pcard__meta">
           <span>
@@ -79,8 +84,7 @@ export function ProjectCard({ project, days, today, variant, only, collapsed, on
           </span>
           {supervisor && (
             <span className="pcard__lead">
-              <PositionMark employee={supervisor} />
-              {supervisor.name}
+              <PersonLink employee={supervisor} />
             </span>
           )}
         </div>

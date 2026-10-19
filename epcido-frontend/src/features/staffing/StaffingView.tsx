@@ -1,47 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarClock, CalendarPlus, Coffee, GripVertical, Sparkles, TriangleAlert, UserX, Users } from "lucide-react";
-import { useData, useModel } from "../../app/DataContext";
+import { CalendarClock, Coffee, Sparkles, TriangleAlert, UserX, Users } from "lucide-react";
+import { useData, useModel, useUser } from "../../app/DataContext";
 import { useUi } from "../../app/UiContext";
 import { PageHeader } from "../../components/PageHeader";
-import { EMPTY_PEOPLE_FILTER, PeopleFilters, passesPeopleFilter, type PeopleFilterValue } from "../../components/PeopleFilters";
-import { CategoryTag, EmploymentTag, PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { CategoryTag, ProjectDot } from "../../components/PersonBadge";
+import { ProjectScopeMark, ScopeFilter, useScope } from "../../components/ScopeFilter";
 import { Segmented } from "../../components/Segmented";
 import { WeekNav } from "../../components/WeekNav";
-import { categories, defaultTask, formatMonths, formatMonthsShort, isEpcido } from "../../domain/labels";
+import { categories, defaultTask } from "../../domain/labels";
 import {
   assignmentEnd,
-  availableFrom,
   epcidoShare,
-  experienceIn,
   FIELD_POSITIONS,
-  leavesBetween,
   longStretchWeeks,
   needsBreak,
   outlookOf,
   restartDate,
-  suggestTargets,
   weeklyStaffing,
-  workChains,
   type PersonOutlook,
   type WeekStaffing,
 } from "../../domain/staffing";
 import type { Project, ProjectCategory, Trade } from "../../domain/types";
-import { leaveNote } from "../../domain/workflow";
 import { addDays, daysBetween, eachDay, formatDate, formatDay, isoWeek, parseISO, startOfWeek, todayISO, type ISODate } from "../../lib/dates";
 import { plural } from "../../lib/text";
 import { AutoStaffDialog } from "./AutoStaffDialog";
 import { BreakDialog } from "./BreakDialog";
+import { PeopleBoard, type PeopleStatus } from "./PeopleBoard";
 import { PlanNextDialog } from "./PlanNextDialog";
 
 const COL = 56; // px na tydzień = 8 px na dzień
 const PX_DAY = COL / 7;
 const OPEN_END = "9999-12-31";
 
-type PeopleFilter = "releasing" | "free" | "long" | "all";
 type TradeFilter = "all" | Trade;
 type CategoryFilter = "all" | ProjectCategory;
-type SortKey = "available" | "experience";
 
 /** Ile tygodni zmieści się obok kolumny nazw i kolumny bocznej (6–18). */
 function useWeeksThatFit() {
@@ -71,14 +64,16 @@ function useWeeksThatFit() {
  *  1. „Wymaga uwagi": braki przed startem projektów, tygodnie bez rezerwy, udział EPCIDO, długo bez przerwy, urlopy,
  *  2. siła robocza: słupki elektryków (czerwień) i mechaników (błękit) — potrzeba, w planie, wolni,
  *  3. projekty: w każdym tygodniu dwa słupki — ilu potrzeba (obrys) i ilu jest w planie (wypełnienie),
- *  4. ludzie: kto się zwalnia, wolni, długo bez przerwy — ze stażem, umową i urlopami; filtry i suwaki stażu.
- * Przeciągnij osobę na tydzień projektu: dodaje się od tego tygodnia do końca fazy (z „Cofnij");
- * z klawiszem Shift — otwiera okno z opcjami. Kliknięcie projektu otwiera jego plan zespołu.
+ *  4. ludzie: ta sama oś tygodni, dokładnie pod projektami — widać, kto jest wolny w którym tygodniu.
+ *
+ * Oś tygodni jest jedna dla całej tablicy i przykleja się do góry ekranu, więc przy najniższym
+ * projekcie wciąż widać, od którego tygodnia zaczyna się kolumna.
  */
 export function StaffingView() {
   const model = useModel();
+  const user = useUser();
   const data = useData();
-  const { openProject } = useUi();
+  const { openProject, confirm } = useUi();
   const navigate = useNavigate();
   const today = todayISO();
   const { ref, weeks: WEEKS } = useWeeksThatFit();
@@ -88,14 +83,13 @@ export function StaffingView() {
   const rangeEnd = addDays(from, WEEKS * 7 - 1);
   const [trade, setTrade] = useState<TradeFilter>("all");
   const [category, setCategory] = useState<CategoryFilter>("all");
-  const [filter, setFilter] = useState<PeopleFilter>("releasing");
-  const [sort, setSort] = useState<SortKey>("available");
-  const [pf, setPf] = useState<PeopleFilterValue>(EMPTY_PEOPLE_FILTER);
+  const scope = useScope(model, user);
   const [planning, setPlanning] = useState<{ outlook: PersonOutlook; preset?: { projectId: string; from: ISODate } } | null>(null);
   const [breaking, setBreaking] = useState<PersonOutlook | null>(null);
   const [proposing, setProposing] = useState<Project | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
   const [dropCell, setDropCell] = useState<string | null>(null);
+  const [focus, setFocus] = useState<{ filter: PeopleStatus; nonce: number } | null>(null);
   const peopleRef = useRef<HTMLElement>(null);
   const trades: Trade[] = trade === "all" ? ["ELECTRICAL", "MECHANICAL"] : [trade];
 
@@ -104,6 +98,7 @@ export function StaffingView() {
       model.projects
         .filter((p) => p.status !== "CLOSED" && (p.endDate ?? OPEN_END) >= from && p.startDate <= rangeEnd)
         .filter((p) => category === "all" || p.category === category)
+        .filter((p) => scope.pass(p))
         .map((p) => ({ project: p, weeks: weeklyStaffing(model, p, weeks) }))
         .sort(
           (a, b) =>
@@ -112,7 +107,7 @@ export function StaffingView() {
               ? a.project.startDate.localeCompare(b.project.startDate)
               : (a.project.endDate ?? "9999").localeCompare(b.project.endDate ?? "9999"))
         ),
-    [model, weeks, from, rangeEnd, category, today]
+    [model, weeks, from, rangeEnd, category, today, scope]
   );
 
   const field = useMemo(() => model.employees.filter((e) => FIELD_POSITIONS.includes(e.position) && e.active !== false), [model]);
@@ -148,30 +143,11 @@ export function StaffingView() {
     [weeks, projects, field, model, trade]
   );
 
-  const byTrade = (o: PersonOutlook) => trade === "all" || o.employee.trade === trade;
-  const byFilters = (o: PersonOutlook) => byTrade(o) && passesPeopleFilter(o.employee, { ...pf, category: category === "all" ? pf.category : category });
-  const groups = {
-    releasing: people.filter((o) => o.status === "releasing" && byFilters(o)),
-    free: people.filter((o) => (o.status === "free" || o.status === "later") && byFilters(o)),
-    long: people.filter((o) => needsBreak(o, today) && byFilters(o)),
-    all: people.filter(byFilters),
-  };
-  const expKey = (o: PersonOutlook) => (category === "all" ? o.employee.experience?.totalMonths ?? 0 : experienceIn(o.employee, category));
-  const avail = (o: PersonOutlook) => availableFrom(model, o.employee, today);
-  const rows = [...groups[filter]].sort((a, b) =>
-    sort === "experience" ? expKey(b) - expKey(a) : avail(a).localeCompare(avail(b)) || expKey(b) - expKey(a)
-  );
-  const pfCounts = useMemo(() => {
-    const base = people.filter((o) => byTrade(o) && passesPeopleFilter(o.employee, { ...pf, employment: "all", category: category === "all" ? pf.category : category }));
-    return { all: base.length, epcido: base.filter((o) => isEpcido(o.employee)).length, agency: base.filter((o) => !isEpcido(o.employee)).length };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [people, pf, trade, category]);
-  const x = (d: ISODate) => daysBetween(from, d) * PX_DAY;
   const shortProjects = projects.filter((p) => p.weeks.some((w) => shortOf(w, trades) > 0)).length;
   const deficitWeeks = workforce.filter((w) => w.balance < 0);
 
   /** Upuszczenie osoby na tydzień projektu: od tego tygodnia (albo od kiedy wolna) do końca fazy. */
-  const drop = (project: Project, week: ISODate, withDialog: boolean) => {
+  const drop = async (project: Project, week: ISODate, withDialog: boolean) => {
     const o = people.find((p) => p.employee.id === dragged);
     setDropCell(null);
     setDragged(null);
@@ -186,6 +162,17 @@ export function StaffingView() {
       setPlanning({ outlook: o, preset: { projectId: project.id, from: start } });
       return;
     }
+    // Przeciągnięcie też jest zapisem — planista potwierdza, zanim cokolwiek pójdzie do bazy
+    const agreed = await confirm({
+      title: "Dopisać do projektu?",
+      lines: [
+        `${o.employee.name} → ${project.name}`,
+        `${defaultTask(o.employee.trade)}: ${formatDate(plan.from)} – ${plan.to ? formatDate(plan.to) : "koniec projektu"}`,
+        ...(plan.breakDays ? [`Wcześniej przerwa: ${plan.breakDays} dni`] : []),
+      ],
+      confirmLabel: "Dopisz do planu",
+    });
+    if (!agreed) return;
     void data.quickAssign({ employeeId: o.employee.id, projectId: project.id, from: plan.from, to: plan.to, task: defaultTask(o.employee.trade), breakDays: plan.breakDays || undefined });
   };
   const dropPlan = (o: PersonOutlook, project: Project, start: ISODate) => {
@@ -305,10 +292,12 @@ export function StaffingView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects, model, today, deficitWeeks, people, trade]);
 
-  function showPeople(f: PeopleFilter) {
-    setFilter(f);
+  function showPeople(f: PeopleStatus) {
+    setFocus({ filter: f, nonce: Date.now() });
     peopleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  const gridCols = `var(--staff-name) repeat(${WEEKS}, ${COL}px) var(--staff-side)`;
 
   return (
     <div className="page staffing" ref={ref}>
@@ -334,9 +323,7 @@ export function StaffingView() {
           onChange={setCategory}
           options={[{ value: "all", label: "Wszystkie" }, ...categories().map((c) => ({ value: c, label: c }))]}
         />
-        <p className="staff-filters__hint">
-          Przeciągnij osobę na tydzień projektu — doda się do końca fazy. Z klawiszem Shift: okno z opcjami.
-        </p>
+        <ScopeFilter scope={scope} />
       </div>
 
       {alerts.length > 0 && (
@@ -365,8 +352,7 @@ export function StaffingView() {
           <TradeLegend />
         </header>
         <div className="staff-scroll">
-          <div className="staff-grid staff-grid--force" style={{ gridTemplateColumns: `var(--staff-name) repeat(${WEEKS}, ${COL}px) var(--staff-side)` }}>
-            <WeekHeader weeks={weeks} today={today} corner=" " trailing=" " />
+          <div className="staff-grid staff-grid--force" style={{ gridTemplateColumns: gridCols }}>
             <div className="staff-row staff-row--chart">
               <div className="staff-name staff-name--force wf-key">
                 <span>
@@ -409,164 +395,158 @@ export function StaffingView() {
         </div>
       </section>
 
-      {/* ---------- Projekty ---------- */}
-      <section className="staff-card" aria-label="Projekty w kolejnych tygodniach">
-        <header className="staff-card__head">
-          <h2>
-            Projekty <em>{shortProjects ? `${shortProjects} z brakami` : "obsadzone"}</em>
-          </h2>
-          <p className="staff-legend">
-            <span className="bars-key">
-              <i className="bars-key__bar bars-key__bar--el" />
-              <i className="bars-key__bar bars-key__bar--me" />
-              obrys = potrzeba, wypełnienie = w planie, kreski = urlop
-            </span>
-          </p>
-        </header>
-        <div className="staff-scroll">
-          <div className="staff-grid" style={{ gridTemplateColumns: `var(--staff-name) repeat(${WEEKS}, ${COL}px) var(--staff-side)` }}>
-            <WeekHeader weeks={weeks} today={today} corner="Projekt" trailing="Najbliższy brak" />
-            {projects.map(({ project, weeks: ws }) => {
-              const endWeek = project.endDate ? startOfWeek(project.endDate) : null;
-              const share = epcidoShare(model, (model.team(project.id)?.members ?? []).map((m) => m.id));
-              const scale = Math.max(1, ...ws.map((w) => Math.max(...trades.map((t) => Math.max(needOfT(w, t), haveOfT(w, t))))));
-              const dropProps = (week: ISODate) => ({
-                onDragOver: (e: React.DragEvent) => {
-                  if (!dragged) return;
-                  e.preventDefault();
-                  const k = `${project.id}|${week}`;
-                  if (dropCell !== k) setDropCell(k);
-                },
-                onDragLeave: () => setDropCell((c) => (c === `${project.id}|${week}` ? null : c)),
-                onDrop: (e: React.DragEvent) => {
-                  e.preventDefault();
-                  drop(project, week, e.shiftKey);
-                },
-              });
-              const open = () => openProject(project.id, "team", true);
+      {/* ---------- Jedna oś tygodni dla projektów i ludzi ---------- */}
+      <div className="staff-board">
+        <div className="staff-ruler">
+          <div className="staff-grid" style={{ gridTemplateColumns: gridCols }}>
+            <div className="staff-corner">Tydzień</div>
+            {weeks.map((w) => {
+              const d = parseISO(w);
+              const isNow = w === startOfWeek(today);
               return (
-                <div
-                  key={project.id}
-                  className={`staff-row staff-row--project ${dropCell?.startsWith(`${project.id}|`) ? "is-drop" : ""} ${project.startDate > today ? "is-future" : ""}`}
-                  style={{ ["--project" as string]: project.color }}
-                >
-                  <div className="staff-name" {...dropProps(weeks[0])}>
-                    <button type="button" className="staff-name__btn" onClick={open} data-tip="Otwórz plan zespołu">
-                      <ProjectDot color={project.color} />
-                      <span>{project.name}</span>
-                      <CategoryTag category={project.category} />
-                    </button>
-                    <span className="staff-name__sub">{projectWhen(project, today)}</span>
-                    {share.epcido + share.agency > 0 && (
-                      <span
-                        className={`staff-name__sub staff-share ${share.ok ? "" : "is-warn"}`}
-                        data-tip={`EPCIDO (UoP, B2B): ${share.epcido} · agencja: ${share.agency} · cel: co najmniej ${model.settings.minEpcidoShare}%`}
-                      >
-                        EPCIDO {share.pct}% · {share.epcido + share.agency} os.
-                      </span>
-                    )}
-                  </div>
-                  {ws.map((w, i) => {
-                    const isEnd = endWeek === w.week;
-                    const isStart = startOfWeek(project.startDate) === w.week;
-                    const k = `${project.id}|${w.week}`;
-                    return (
-                      <div
-                        key={w.week}
-                        className={`staff-cell staff-cell--bars ${w.active ? "is-active" : ""} ${isEnd ? "is-end" : ""} ${isStart ? "is-start" : ""} ${i === 0 && offset === 0 ? "is-now" : ""} ${dropCell === k ? "is-target" : ""}`}
-                        data-tip={dragged ? undefined : w.active ? cellTip(project, w) : undefined}
-                        onClick={open}
-                        {...dropProps(w.week)}
-                      >
-                        {w.active && (w.needDefined || w.electrical + w.mechanical > 0) && (
-                          <span className="tbars">
-                            {trades.map((t) => (
-                              <TradeBar key={t} trade={t} need={w.needDefined ? needOfT(w, t) : 0} have={haveOfT(w, t)} away={awayOfT(w, t)} scale={scale} />
-                            ))}
-                          </span>
-                        )}
-                        {dropCell === k && <span className="drop-preview">{preview(project, w.week)}</span>}
-                        {isEnd && project.endDate && (
-                          <span className="staff-cell__end" style={{ left: (parseISO(project.endDate).getDay() || 7) * PX_DAY }} aria-label={`Koniec ${formatDate(project.endDate)}`} />
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div className="staff-side staff-side--project" {...dropProps(weeks[0])}>
-                    <ProjectNeed weeks={ws} trades={trades} />
-                    {ws.some((w) => shortOf(w, trades) > 0) && project.demand.some((d) => d.to >= today) && (
-                      <button
-                        type="button"
-                        className="icon-btn icon-btn--sm staff-propose"
-                        onClick={() => setProposing(project)}
-                        data-tip="Zaproponuj obsadę braków"
-                        aria-label={`Zaproponuj obsadę: ${project.name}`}
-                      >
-                        <Sparkles size={16} aria-hidden />
-                      </button>
-                    )}
-                  </div>
+                <div key={w} className={`staff-week ${isNow ? "is-now" : ""}`}>
+                  <b>tydz. {isoWeek(w).week}</b>
+                  <span>
+                    {d.getDate()}.{String(d.getMonth() + 1).padStart(2, "0")}
+                  </span>
                 </div>
               );
             })}
+            <div className="staff-corner staff-corner--side">{formatDate(from).replace(/ \d{4}$/, "")} – {formatDate(rangeEnd)}</div>
           </div>
         </div>
-      </section>
 
-      {/* ---------- Ludzie ---------- */}
-      <section className="staff-card" aria-label="Ludzie w czasie" ref={peopleRef}>
-        <header className="staff-card__head staff-card__head--people">
-          <h2>Ludzie</h2>
-          <div className="staff-card__tools">
-            <Segmented<PeopleFilter>
-              label="Kogo pokazać"
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: "releasing", label: "Zwalniają się", count: groups.releasing.length },
-                { value: "free", label: "Wolni", count: groups.free.length },
-                { value: "long", label: "Bez przerwy", count: groups.long.length },
-                { value: "all", label: "Wszyscy", count: groups.all.length },
-              ]}
-            />
-            <Segmented<SortKey>
-              label="Kolejność"
-              value={sort}
-              onChange={setSort}
-              options={[
-                { value: "available", label: "Od kiedy wolni" },
-                { value: "experience", label: category === "all" ? "Staż" : `Staż ${category}` },
-              ]}
-            />
+        {/* ---------- Projekty ---------- */}
+        <section className="staff-card staff-card--flush" aria-label="Projekty w kolejnych tygodniach">
+          <header className="staff-card__head">
+            <h2>
+              Projekty <em>{shortProjects ? `${shortProjects} z brakami` : "obsadzone"}</em>
+            </h2>
+            <p className="staff-legend">
+              <span className="bars-key">
+                <i className="bars-key__bar bars-key__bar--el" />
+                <i className="bars-key__bar bars-key__bar--me" />
+                obrys = potrzeba, wypełnienie = w planie, kreski = urlop
+              </span>
+            </p>
+          </header>
+          <div className="staff-scroll">
+            <div className="staff-grid" style={{ gridTemplateColumns: gridCols }}>
+              {projects.length === 0 && <p className="staff-empty">Żaden projekt nie pasuje do filtrów.</p>}
+              {projects.map(({ project, weeks: ws }) => {
+                const endWeek = project.endDate ? startOfWeek(project.endDate) : null;
+                const share = epcidoShare(model, (model.team(project.id)?.members ?? []).map((m) => m.id));
+                const scale = Math.max(1, ...ws.map((w) => Math.max(...trades.map((t) => Math.max(needOfT(w, t), haveOfT(w, t))))));
+                const mine = scope.scopeOf(project) === "mine";
+                const dropProps = (week: ISODate) => ({
+                  onDragOver: (e: React.DragEvent) => {
+                    if (!dragged) return;
+                    e.preventDefault();
+                    const k = `${project.id}|${week}`;
+                    if (dropCell !== k) setDropCell(k);
+                  },
+                  onDragLeave: () => setDropCell((c) => (c === `${project.id}|${week}` ? null : c)),
+                  onDrop: (e: React.DragEvent) => {
+                    e.preventDefault();
+                    drop(project, week, e.shiftKey);
+                  },
+                });
+                const open = () => openProject(project.id, "team", true);
+                return (
+                  <div
+                    key={project.id}
+                    className={`staff-row staff-row--project ${dropCell?.startsWith(`${project.id}|`) ? "is-drop" : ""} ${project.startDate > today ? "is-future" : ""} ${mine ? "" : "is-other"}`}
+                    style={{ ["--project" as string]: project.color }}
+                  >
+                    <div className="staff-name" {...dropProps(weeks[0])}>
+                      <button type="button" className="staff-name__btn" onClick={open} data-tip="Otwórz plan zespołu">
+                        <ProjectDot color={project.color} />
+                        <span>{project.name}</span>
+                        <CategoryTag category={project.category} />
+                      </button>
+                      <span className="staff-name__sub">
+                        {projectWhen(project, today)}
+                        <ProjectScopeMark scope={scope} project={project} />
+                      </span>
+                      {share.epcido + share.agency > 0 && (
+                        <span
+                          className={`staff-name__sub staff-share ${share.ok ? "" : "is-warn"}`}
+                          data-tip={`EPCIDO (UoP, B2B): ${share.epcido} · agencja: ${share.agency} · cel: co najmniej ${model.settings.minEpcidoShare}%`}
+                        >
+                          EPCIDO {share.pct}% · {share.epcido + share.agency} os.
+                        </span>
+                      )}
+                    </div>
+                    {ws.map((w, i) => {
+                      const isEnd = endWeek === w.week;
+                      const isStart = startOfWeek(project.startDate) === w.week;
+                      const k = `${project.id}|${w.week}`;
+                      return (
+                        <div
+                          key={w.week}
+                          className={`staff-cell staff-cell--bars ${w.active ? "is-active" : ""} ${isEnd ? "is-end" : ""} ${isStart ? "is-start" : ""} ${i === 0 && offset === 0 ? "is-now" : ""} ${dropCell === k ? "is-target" : ""}`}
+                          data-tip={dragged ? undefined : w.active ? cellTip(project, w) : undefined}
+                          onClick={open}
+                          {...dropProps(w.week)}
+                        >
+                          {w.active && (w.needDefined || w.electrical + w.mechanical > 0) && (
+                            <span className="tbars">
+                              {trades.map((t) => (
+                                <TradeBar key={t} trade={t} need={w.needDefined ? needOfT(w, t) : 0} have={haveOfT(w, t)} away={awayOfT(w, t)} scale={scale} />
+                              ))}
+                            </span>
+                          )}
+                          {dropCell === k && <span className="drop-preview">{preview(project, w.week)}</span>}
+                          {isEnd && project.endDate && (
+                            <span className="staff-cell__end" style={{ left: (parseISO(project.endDate).getDay() || 7) * PX_DAY }} aria-label={`Koniec ${formatDate(project.endDate)}`} />
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="staff-side staff-side--project" {...dropProps(weeks[0])}>
+                      <ProjectNeed weeks={ws} trades={trades} />
+                      {ws.some((w) => shortOf(w, trades) > 0) && project.demand.some((d) => d.to >= today) && (
+                        <button
+                          type="button"
+                          className="icon-btn icon-btn--sm staff-propose"
+                          onClick={() => setProposing(project)}
+                          data-tip="Zaproponuj obsadę braków"
+                          aria-label={`Zaproponuj obsadę: ${project.name}`}
+                        >
+                          <Sparkles size={16} aria-hidden />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <PeopleFilters value={pf} onChange={setPf} categories={categories()} lockedCategory={category === "all" ? null : category} counts={pfCounts} />
-        </header>
-        <div className="staff-scroll">
-          <div className="staff-grid staff-grid--people" style={{ gridTemplateColumns: `var(--staff-name) ${WEEKS * COL}px var(--staff-side)` }}>
-            <WeekHeader weeks={weeks} today={today} corner="Osoba" single trailing="Dostępność" />
-            {rows.length === 0 && <p className="staff-empty">Nikt nie pasuje do filtrów.</p>}
-            {rows.map((o) => (
-              <PersonRow
-                key={o.employee.id}
-                outlook={o}
-                from={from}
-                to={rangeEnd}
-                x={x}
-                today={today}
-                category={category === "all" ? null : category}
-                dragging={dragged === o.employee.id}
-                onDragStart={() => setDragged(o.employee.id)}
-                onDragEnd={() => {
-                  setDragged(null);
-                  setDropCell(null);
-                }}
-                onPlan={() => setPlanning({ outlook: o })}
-                onBreak={() => setBreaking(o)}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+
+        {/* ---------- Ludzie ---------- */}
+        <section className="staff-card staff-card--flush" aria-label="Ludzie w czasie" ref={peopleRef}>
+          <header className="staff-card__head staff-card__head--people">
+            <h2>Ludzie</h2>
+          </header>
+          <PeopleBoard
+            from={from}
+            weeks={weeks}
+            col={COL}
+            variant="staffing"
+            editable
+            category={category === "all" ? null : category}
+            dragged={dragged}
+            onDragPerson={(id) => {
+              setDragged(id);
+              if (!id) setDropCell(null);
+            }}
+            onPlan={(o) => setPlanning({ outlook: o })}
+            onBreak={(o) => setBreaking(o)}
+            focus={focus}
+          />
+        </section>
+      </div>
 
       {planning && <PlanNextDialog outlook={planning.outlook} preset={planning.preset} onClose={() => setPlanning(null)} />}
       {breaking && <BreakDialog outlook={breaking} onClose={() => setBreaking(null)} />}
@@ -575,7 +555,18 @@ export function StaffingView() {
           project={proposing}
           team={(model.assignmentsByProject.get(proposing.id) ?? []).map((a) => ({ employeeId: a.employeeId, from: a.from, to: a.to }))}
           onClose={() => setProposing(null)}
-          onApply={(items) => data.planMany(items)}
+          onApply={async (items) => {
+            const agreed = await confirm({
+              title: `Dopisać ${items.length === 1 ? "osobę" : `${items.length} osób`} do ${proposing.name}?`,
+              lines: items.map((it) => {
+                const e = model.employeeById.get(it.employeeId);
+                return `${e?.name ?? it.employeeId}: ${formatDate(it.from)} – ${it.to ? formatDate(it.to) : "koniec projektu"}${it.breakDays ? ` (po przerwie ${it.breakDays} dni)` : ""}`;
+              }),
+              confirmLabel: "Zapisz obsadę",
+            });
+            if (!agreed) return false;
+            return data.planMany(items);
+          }}
         />
       )}
     </div>
@@ -659,28 +650,6 @@ function WorkforceChart({
   );
 }
 
-function WeekHeader({ weeks, today, corner, single, trailing }: { weeks: ISODate[]; today: ISODate; corner: string; single?: boolean; trailing?: string }) {
-  const cells = weeks.map((w) => {
-    const d = parseISO(w);
-    const isNow = w === startOfWeek(today);
-    return (
-      <div key={w} className={`staff-week ${isNow ? "is-now" : ""}`}>
-        <b>tydz. {isoWeek(w).week}</b>
-        <span>
-          {d.getDate()}.{String(d.getMonth() + 1).padStart(2, "0")}
-        </span>
-      </div>
-    );
-  });
-  return (
-    <>
-      <div className="staff-corner">{corner}</div>
-      {single ? <div className="staff-weeks">{cells}</div> : cells}
-      {trailing && <div className="staff-corner staff-corner--side">{trailing}</div>}
-    </>
-  );
-}
-
 /** Najbliższy tydzień z brakiem — od kiedy i ilu brakuje. */
 function ProjectNeed({ weeks, trades }: { weeks: WeekStaffing[]; trades: Trade[] }) {
   const defined = weeks.some((w) => w.needDefined);
@@ -694,176 +663,10 @@ function ProjectNeed({ weeks, trades }: { weeks: WeekStaffing[]; trades: Trade[]
   );
 }
 
-function PersonRow({
-  outlook: o,
-  from,
-  to,
-  x,
-  today,
-  category,
-  dragging,
-  onDragStart,
-  onDragEnd,
-  onPlan,
-  onBreak,
-}: {
-  outlook: PersonOutlook;
-  from: ISODate;
-  to: ISODate;
-  x: (d: ISODate) => number;
-  today: ISODate;
-  category: ProjectCategory | null;
-  dragging: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onPlan: () => void;
-  onBreak: () => void;
-}) {
-  const model = useModel();
-  const chains = workChains(model, o.employee.id);
-  const list = (model.assignmentsByEmployee.get(o.employee.id) ?? []).filter((a) => a.from <= to && assignmentEnd(model, a) >= from);
-  const suggestion = o.status === "releasing" || o.status === "free" ? bestTarget(model, o, today) : null;
-  const long = needsBreak(o, today);
-  const free = availableFrom(model, o.employee, today);
-  const exp = o.employee.experience;
-  const topCategory = exp ? (Object.entries(exp.byCategory) as [ProjectCategory, number][]).sort((a, b) => b[1] - a[1])[0] : null;
-  const leaves = leavesBetween(model, o.employee.id, from, to);
-
-  return (
-    <>
-      <div
-        className={`staff-name staff-name--drag ${dragging ? "is-dragging" : ""}`}
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData("text/plain", o.employee.id);
-          e.dataTransfer.effectAllowed = "copy";
-          onDragStart();
-        }}
-        onDragEnd={onDragEnd}
-        data-tip="Przeciągnij na tydzień projektu"
-      >
-        <span className="staff-name__person">
-          <GripVertical size={14} className="staff-grip" aria-hidden />
-          <PositionMark employee={o.employee} />
-          <span>{o.employee.name}</span>
-          <EmploymentTag employee={o.employee} />
-        </span>
-        <span className="staff-name__sub">{personWhen(o)}</span>
-        {exp && (
-          <span
-            className="staff-name__sub staff-exp"
-            data-tip={categories().map((c) => `${c}: ${formatMonths(exp.byCategory[c] ?? 0)}`).join("\n") + `\nŁącznie: ${formatMonths(exp.totalMonths)}`}
-          >
-            {category
-              ? `${category} ${formatMonthsShort(exp.byCategory[category] ?? 0)}`
-              : topCategory && topCategory[1] > 0
-                ? `${topCategory[0]} ${formatMonthsShort(topCategory[1])}`
-                : "bez kategorii"}{" "}
-            · łącznie {formatMonthsShort(exp.totalMonths)}
-          </span>
-        )}
-      </div>
-      <div className="staff-track">
-        {chains.slice(1).map((c, i) => {
-          const gapFrom = addDays(chains[i].to, 1);
-          const gapTo = addDays(c.from, -1);
-          if (gapTo < from || gapFrom > to) return null;
-          const a = gapFrom < from ? from : gapFrom;
-          const b = gapTo > to ? to : gapTo;
-          return (
-            <span key={`gap-${c.from}`} className="staff-gap" style={{ left: x(a), width: (daysBetween(a, b) + 1) * PX_DAY }} data-tip={`Przerwa ${formatDate(gapFrom)} – ${formatDate(gapTo)}`}>
-              <Coffee size={12} aria-hidden />
-            </span>
-          );
-        })}
-        {list.map((a) => {
-          const p = model.projectById.get(a.projectId);
-          if (!p) return null;
-          const end = assignmentEnd(model, a);
-          const s = a.from < from ? from : a.from;
-          const e = end > to ? to : end;
-          const width = (daysBetween(s, e) + 1) * PX_DAY;
-          return (
-            <span
-              key={a.id}
-              className="staff-bar"
-              style={{ left: x(s), width, ["--project" as string]: p.color }}
-              data-tip={`${p.name} (${p.category})${a.task ? ` · ${a.task}` : ""}: ${formatDate(a.from)} – ${end.startsWith("9999") ? "bez końca" : formatDate(end)}`}
-            >
-              {width > 44 && <span>{width > 110 ? p.name : p.number}</span>}
-            </span>
-          );
-        })}
-        {leaves.map((l) => {
-          const a = l.from < from ? from : l.from;
-          const b = l.to > to ? to : l.to;
-          return (
-            <span
-              key={l.id}
-              className={`staff-leave staff-leave--${l.status === "PENDING" ? "pending" : l.type === "SICK" ? "sick" : "leave"}`}
-              style={{ left: x(a), width: Math.max(PX_DAY, (daysBetween(a, b) + 1) * PX_DAY) }}
-              data-tip={`${formatDate(l.from)} – ${formatDate(l.to)}\n${leaveNote(l)}`}
-            />
-          );
-        })}
-        {today >= from && today <= to && <span className="staff-today" style={{ left: x(today) + PX_DAY / 2 }} />}
-      </div>
-      <div className="staff-side">
-        <div className="staff-side__info">
-          <span className={`staff-free ${free <= today ? "is-now" : ""}`}>
-            {free.startsWith("9999") ? "zajęty bez końca" : free <= today ? "wolny teraz" : `wolny od ${formatDay(free)}`}
-          </span>
-          {long && (
-            <span className="staff-flag staff-flag--long" data-tip="Ciąg pracy bez przerwy na wyjazd do domu">
-              <TriangleAlert size={13} aria-hidden />
-              {o.stretchWeeks} tyg. bez przerwy
-            </span>
-          )}
-          {suggestion && (
-            <span className="staff-suggest" data-tip={`W tygodniu startu brakuje: ${suggestion.shortage}`}>
-              <ProjectDot color={suggestion.project.color} />
-              {suggestion.project.name}
-              <em>brak {suggestion.shortage}</em>
-            </span>
-          )}
-        </div>
-        <div className="staff-side__actions">
-          {(o.status === "releasing" || o.status === "free" || o.status === "later") && (
-            <button type="button" className="btn btn--primary btn--sm" onClick={onPlan} data-tip="Zaplanuj kolejny projekt po obecnym">
-              <CalendarPlus size={15} aria-hidden />
-              Zaplanuj
-            </button>
-          )}
-          {o.chain && (long || o.status === "working") && (
-            <button type="button" className={`btn btn--sm ${long ? "btn--secondary" : "btn--quiet"}`} onClick={onBreak} data-tip="Wstaw przerwę na wyjazd do domu">
-              <Coffee size={15} aria-hidden />
-              Przerwa
-            </button>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function bestTarget(model: ReturnType<typeof useModel>, o: PersonOutlook, today: ISODate) {
-  const start = restartDate(o.releaseDate ?? addDays(today, -1), o.stretchWeeksAtEnd >= 6 ? 7 : 0);
-  const best = suggestTargets(model, o.employee, start, o.currentProject?.id)[0];
-  return best && best.shortage > 0 ? best : null;
-}
-
 function projectWhen(p: Project, today: ISODate): string {
   if (p.startDate > today) return `start ${formatDay(p.startDate)} · za ${weeksTo(today, p.startDate)}`;
   if (!p.endDate) return "bez daty końca";
   return `koniec ${formatDay(p.endDate)} · za ${weeksTo(today, p.endDate)}`;
-}
-
-function personWhen(o: PersonOutlook): string {
-  if (o.status === "free") return o.next ? `od ${formatDate(o.next.from)} w kolejnym projekcie` : "bez przydziału";
-  if (o.status === "later") return `startuje ${formatDate(o.next!.from)}`;
-  const p = o.currentProject?.name ?? "projekt";
-  if (o.releaseDate) return `${p} · kończy ${formatDay(o.releaseDate)}`;
-  return `${p} · do końca projektu`;
 }
 
 function weeksTo(from: ISODate, to: ISODate): string {

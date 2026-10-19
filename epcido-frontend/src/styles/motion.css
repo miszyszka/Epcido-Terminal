@@ -1,0 +1,248 @@
+/*
+ * Epcido Terminal — ruch.
+ * Zasada: ruch ma coś mówić (coś się pojawiło, coś zareagowało, coś zniknęło), nigdy nie zdobić.
+ * Krótko (120–260 ms), jedną krzywą (--ease), małe dystanse. Wszystko gaśnie przy
+ * „ogranicz ruch" w systemie — reguła jest na końcu base.css.
+ */
+
+/* ---------- Wejścia ---------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes rise-sm {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+@keyframes sweep {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Ekran: treść wjeżdża raz, po wejściu na stronę */
+.shell__main > * {
+  animation: rise var(--dur) var(--ease);
+}
+
+/* Karty i sekcje pojawiają się z lekkim przesunięciem; pierwsze cztery kaskadą */
+.pcard,
+.staff-card,
+.staff-board,
+.alerts,
+.table-card,
+.withheld-note,
+.withheld-list {
+  animation: rise var(--dur) var(--ease) backwards;
+}
+.pcards > .pcard:nth-child(1),
+.pcards > .pcard:nth-child(2) {
+  animation-delay: 40ms;
+}
+.pcards > .pcard:nth-child(3) {
+  animation-delay: 80ms;
+}
+.pcards > .pcard:nth-child(n + 4) {
+  animation-delay: 120ms;
+}
+.alerts__list .alert {
+  animation: sweep var(--dur) var(--ease) backwards;
+}
+.alerts__list .alert:nth-child(2) {
+  animation-delay: 50ms;
+}
+.alerts__list .alert:nth-child(3) {
+  animation-delay: 100ms;
+}
+.alerts__list .alert:nth-child(n + 4) {
+  animation-delay: 150ms;
+}
+
+/* ---------- Reakcja na dotyk ---------- */
+.btn {
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn--primary:hover:not(:disabled) {
+  box-shadow: 0 8px 18px -10px rgb(15 61 58 / 0.7);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+  transition-duration: 60ms;
+}
+.icon-btn,
+.chip,
+.link-btn {
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+.icon-btn:hover,
+.chip:hover {
+  transform: translateY(-1px);
+}
+.icon-btn:active,
+.chip:active {
+  transform: scale(0.94);
+  transition-duration: 60ms;
+}
+
+/* Przełącznik: aktywna pozycja „siada" z lekkim odbiciem */
+.segmented__item {
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+.segmented__item.is-active {
+  animation: seat 220ms var(--ease);
+}
+@keyframes seat {
+  0% {
+    transform: scale(0.92);
+  }
+  60% {
+    transform: scale(1.03);
+  }
+}
+.segmented__count {
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+/* Nawigacja: ikona drgnie przy najechaniu, aktywna pozycja wjeżdża */
+.dock__link {
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+.dock__link:hover svg {
+  transform: translateY(-1px) scale(1.06);
+}
+.dock__link svg {
+  transition: transform var(--dur) var(--ease);
+}
+.dock__link.is-active {
+  animation: seat 240ms var(--ease);
+}
+.dock__count {
+  animation: pop var(--dur-fast) var(--ease);
+}
+
+/* ---------- Dni i paski ---------- */
+.day {
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+.day:hover {
+  transform: scale(1.22);
+  z-index: 1;
+}
+.daycard {
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+.daycard.is-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px -8px rgb(15 61 58 / 0.45);
+}
+.daycard.is-clickable:active {
+  transform: scale(0.97);
+  transition-duration: 60ms;
+}
+.bar,
+.staff-bar,
+.plan-leave,
+.staff-leave {
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    filter var(--dur-fast) var(--ease);
+}
+.bar.is-editable:hover {
+  filter: brightness(1.04);
+}
+.bar--ghost {
+  cursor: pointer;
+}
+.bar--ghost:hover {
+  filter: brightness(0.96);
+  transform: translateY(-1px);
+}
+.tbar__fill,
+.wf-bar__fill,
+.wf-bar__need,
+.wf-bar__free,
+.need-bar__fill,
+.need-bar__need {
+  transition: height var(--dur) var(--ease), width var(--dur) var(--ease);
+}
+.progress__bar span {
+  transition: width var(--dur) var(--ease);
+  animation: grow-x 420ms var(--ease);
+  transform-origin: left;
+}
+
+/* Wiersze tabel i list reagują na kursor */
+.table tbody tr,
+.staff-row--project > *,
+.cal__row {
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+/* ---------- Pola ---------- */
+.control,
+.inline-search {
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+/* ---------- Elementy pływające ---------- */
+.popover,
+.menu {
+  animation: pop var(--dur-fast) var(--ease);
+}
+.tooltip {
+  animation: fade var(--dur-fast) var(--ease);
+}
+
+/* ---------- Panel roboczy ---------- */
+.devpanel-tab {
+  animation: sweep var(--dur) var(--ease);
+}
+
+/* Ostatnie słowo ma ustawienie systemowe: kto prosi o mniej ruchu, dostaje statyczny interfejs. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -4,7 +4,7 @@ import type { Model } from "../app/DataContext";
 import { addDays, startOfWeek, toISO, type ISODate } from "../lib/dates";
 import { epcidoShare } from "./staffing";
 import { sheetsFor } from "./timesheets";
-import { countTimesheets, isFinal, isWeekClosed } from "./workflow";
+import { countTimesheets, isComplete, isWeekClosed } from "./workflow";
 
 export interface ProjectStats {
   /** Otwarte timesheety (projekt × tydzień) z czymś do zatwierdzenia */
@@ -21,11 +21,12 @@ export interface ProjectStats {
 
 export function projectStats(model: Model, projectId: string, now: Date, from?: ISODate, to?: ISODate): ProjectStats {
   const pending: { projectId: string; date: ISODate }[] = [];
+  const project = model.projectById.get(projectId);
   let absences = 0;
-  for (const [, days] of model.entries.get(projectId) ?? []) {
+  for (const [employeeId, days] of model.entries.get(projectId) ?? []) {
     for (const [date, entry] of days) {
       if (entry.kind === "ABSENCE" && (!from || date >= from) && (!to || date <= to)) absences++;
-      if (!isFinal(entry) && !isWeekClosed(date, now)) pending.push({ projectId, date });
+      if (project && !isComplete(project, employeeId, entry) && !isWeekClosed(date, now)) pending.push({ projectId, date });
     }
   }
   const sheets = sheetsFor(model, now);

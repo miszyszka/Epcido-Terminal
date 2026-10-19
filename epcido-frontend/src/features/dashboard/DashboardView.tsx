@@ -5,30 +5,37 @@ import { useNow, useQueue } from "../../app/hooks";
 import { MissedMark } from "../../components/DayCell";
 import { DeadlineBanner } from "../../components/DeadlineBanner";
 import { PageHeader } from "../../components/PageHeader";
-import { PositionMark, ProjectDot } from "../../components/PersonBadge";
-import { can, visibleProjects } from "../../domain/permissions";
+import { ProjectDot } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
+import { ProjectScopeMark, ScopeFilter, useScope } from "../../components/ScopeFilter";
+import { can } from "../../domain/permissions";
 import { supervisorStats, timesheetsNom } from "../../domain/workflow";
+import { plural } from "../../lib/text";
 
-/** Pulpit Installation Managera (i administratora): supervisorzy i to, co jeszcze muszą zatwierdzić. */
+/**
+ * Pulpit Installation Managera (i administratora): supervisorzy i to, co jeszcze muszą zatwierdzić.
+ * IM widzi wszystkie projekty firmy, więc każdy wiersz mówi, czy projekt jest jego, czy innego IM.
+ */
 export function DashboardView() {
   const model = useModel();
   const user = useUser();
   const now = useNow();
   const queue = useQueue();
+  const scope = useScope(model, user);
 
   const stats = useMemo(() => {
-    const projects = visibleProjects(model, user);
+    const projects = model.projects.filter((p) => scope.pass(p));
     const svIds = [...new Set(projects.map((p) => p.supervisorId).filter((id): id is string => Boolean(id)))];
     return svIds
       .map((id) => model.employeeById.get(id))
       .filter((e): e is NonNullable<typeof e> => Boolean(e))
       .map((sv) => supervisorStats(model, sv, now))
       .sort((a, b) => b.pending - a.pending || b.missed - a.missed || a.supervisor.name.localeCompare(b.supervisor.name, "pl", { numeric: true }));
-  }, [model, user, now]);
+  }, [model, now, scope]);
 
   return (
     <div className="page">
-      <PageHeader title="Pulpit" />
+      <PageHeader title="Pulpit" actions={<ScopeFilter scope={scope} />} />
       {queue.summary && <DeadlineBanner summary={queue.summary} isAdmin={can(user, "hours.fixWithheld")} />}
 
       <div className="table-card">
@@ -52,10 +59,7 @@ export function DashboardView() {
               return (
                 <tr key={s.supervisor.id}>
                   <th scope="row">
-                    <span className="person-cell">
-                      <PositionMark employee={s.supervisor} />
-                      {s.supervisor.name}
-                    </span>
+                    <PersonLink employee={s.supervisor} />
                   </th>
                   <td>
                     <span className="project-list">
@@ -65,6 +69,7 @@ export function DashboardView() {
                           <span key={id} className="project-tag">
                             <ProjectDot color={p.color} />
                             {p.name}
+                            <ProjectScopeMark scope={scope} project={p} />
                           </span>
                         );
                       })}
@@ -72,7 +77,12 @@ export function DashboardView() {
                   </td>
                   <td>
                     {s.pending > 0 ? (
-                      <span className="count-cell count-cell--pending">{timesheetsNom(s.pending)}</span>
+                      <span
+                        className="count-cell count-cell--pending"
+                        data-tip={`${s.pendingDays} ${plural(s.pendingDays, "dzień", "dni", "dni")} u ${s.pendingPeople} ${plural(s.pendingPeople, "osoby", "osób", "osób")} — zatwierdza supervisor, nie Ty`}
+                      >
+                        {timesheetsNom(s.pending)}
+                      </span>
                     ) : (
                       <span className="muted">Wszystko zatwierdzone</span>
                     )}
@@ -85,7 +95,15 @@ export function DashboardView() {
                       <span className="progress__label">{pct}%</span>
                     </div>
                   </td>
-                  <td>{s.awaitingFinal > 0 ? <span className="count-cell">{timesheetsNom(s.awaitingFinal)}</span> : <span className="muted">—</span>}</td>
+                  <td>
+                    {s.awaitingFinal > 0 ? (
+                      <span className="count-cell" data-tip="Godziny samego supervisora — te podpisujesz Ty">
+                        {timesheetsNom(s.awaitingFinal)}
+                      </span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
                   <td>
                     {s.missed > 0 ? (
                       <span className="badge badge--missed" data-tip="Nie zatwierdzone na czas. Zatwierdzić może tylko administrator.">
@@ -97,9 +115,9 @@ export function DashboardView() {
                     )}
                   </td>
                   <td className="cell-action">
-                    {s.awaitingFinal > 0 && (
+                    {(s.awaitingFinal > 0 || s.pending > 0) && (
                       <Link to={`/zatwierdzanie?sv=${s.supervisor.id}`} className="btn btn--secondary btn--sm">
-                        Przejrzyj i zatwierdź
+                        {s.awaitingFinal > 0 ? "Przejrzyj i zatwierdź" : "Zobacz kolejkę"}
                       </Link>
                     )}
                   </td>
@@ -108,7 +126,7 @@ export function DashboardView() {
             })}
           </tbody>
         </table>
-        {stats.length === 0 && <p className="empty empty--inline">Brak supervisorów w Twoich projektach.</p>}
+        {stats.length === 0 && <p className="empty empty--inline">Brak supervisorów w wybranych projektach.</p>}
       </div>
     </div>
   );

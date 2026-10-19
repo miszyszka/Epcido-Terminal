@@ -4,6 +4,7 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/components.css";
 import "./styles/views.css";
+import "./styles/motion.css";
 import App from "./App.tsx";
 
 createRoot(document.getElementById("root")!).render(

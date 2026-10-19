@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Check } from "lucide-react";
 import { useData, useModel, useUser } from "../../app/DataContext";
 import { useNow, useQueue } from "../../app/hooks";
@@ -7,13 +7,16 @@ import { useUi } from "../../app/UiContext";
 import { DayCard, MissedMark } from "../../components/DayCell";
 import { DeadlineBanner } from "../../components/DeadlineBanner";
 import { PageHeader } from "../../components/PageHeader";
-import { PositionMark, ProjectDot } from "../../components/PersonBadge";
+import { ProjectDot } from "../../components/PersonBadge";
+import { PersonLink } from "../../components/PersonLink";
 import { cellView, expectedDays, problemSummary, sheetsFor, WITHHELD_MESSAGE, type SheetInfo } from "../../domain/timesheets";
 import { can } from "../../domain/permissions";
 import {
   approvalNote,
   deadlineSummary,
+  describeHours,
   editRight,
+  supervisorOversight,
   timesheetsNom,
   withheldInScope,
   type QueueItem,
@@ -48,6 +51,11 @@ export function ApprovalsView() {
     [items, model]
   );
   const svName = svFilter ? model.employeeById.get(svFilter)?.name : null;
+  // Installation Manager nie klika godzin zespołu — ale musi widzieć, gdzie stoi podpis supervisora
+  const oversight = useMemo(
+    () => (can(user, "hours.approveFinal") ? supervisorOversight(model, user, now).filter((r) => !svFilter || r.supervisorId === svFilter) : []),
+    [model, user, now, svFilter]
+  );
 
   return (
     <div className="page">
@@ -105,10 +113,15 @@ export function ApprovalsView() {
         </section>
       )}
 
+      {oversight.length > 0 && <OversightSection rows={oversight} />}
+
       {items.length === 0 ? (
         <div className="empty empty--done">
           <p>
-            <strong>Nic nie czeka na Ciebie.</strong> Nowe godziny pojawią się tutaj, gdy zespół je wpisze.
+            <strong>Nic nie czeka na Ciebie.</strong>{" "}
+            {oversight.length > 0
+              ? "Godziny zespołu zatwierdzają supervisorzy — powyżej widzisz, co jeszcze mają do podpisania."
+              : "Nowe godziny pojawią się tutaj, gdy zespół je wpisze."}
           </p>
         </div>
       ) : (
@@ -129,8 +142,7 @@ export function ApprovalsView() {
                   <div className="pcard__meta">
                     {sv && (
                       <span className="pcard__lead">
-                        <PositionMark employee={sv} />
-                        {sv.name}
+                        <PersonLink employee={sv} />
                       </span>
                     )}
                   </div>
@@ -147,6 +159,97 @@ export function ApprovalsView() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Podgląd dla Installation Managera: czego jeszcze nie podpisali jego supervisorzy.
+ * Tu się nic nie zatwierdza — IM ma wiedzieć, kogo pogonić przed terminem.
+ */
+function OversightSection({ rows }: { rows: ReturnType<typeof supervisorOversight> }) {
+  const model = useModel();
+  const now = useNow();
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const bySupervisor = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const key = r.supervisorId ?? "—";
+    bySupervisor.set(key, [...(bySupervisor.get(key) ?? []), r]);
+  }
+  const days = rows.reduce((s, r) => s + r.dates.length, 0);
+  const SHOW = 5;
+
+  return (
+    <section className="oversight" aria-label="Kolejka supervisorów">
+      <header className="oversight__head">
+        <h2 className="section-title">Czeka na Twoich supervisorów</h2>
+        <span className="badge badge--pending">
+          {days} {days === 1 ? "dzień" : "dni"} bez podpisu
+        </span>
+      </header>
+      <p className="section-lead">
+        Godziny zespołu zatwierdza supervisor projektu i to jest zatwierdzenie ostateczne. Ty podpisujesz tylko godziny samych supervisorów — tutaj widzisz, gdzie stoi ich podpis.
+      </p>
+      <div className="oversight__list">
+        {[...bySupervisor.entries()].map(([svId, list]) => {
+          const sv = svId === "—" ? null : model.employeeById.get(svId);
+          const expanded = open.has(svId);
+          const shown = expanded ? list : list.slice(0, SHOW);
+          const svDays = list.reduce((s, r) => s + r.dates.length, 0);
+          return (
+            <article key={svId} className="oversight__card">
+              <header className="oversight__card-head">
+                {sv ? <PersonLink employee={sv} /> : <span className="muted">Projekt bez supervisora</span>}
+                <span className="oversight__count">
+                  {svDays} {svDays === 1 ? "dzień" : "dni"} · {list.length} {list.length === 1 ? "osoba" : "osób"}
+                </span>
+                {sv && (
+                  <Link to={`/pulpit`} className="link-btn">
+                    Pulpit
+                  </Link>
+                )}
+              </header>
+              <ul className="oversight__rows">
+                {shown.map((r) => {
+                  const p = model.projectById.get(r.projectId);
+                  const e = model.employeeById.get(r.employeeId);
+                  const first = model.entry(r.projectId, r.employeeId, r.dates[0]);
+                  return (
+                    <li key={r.key}>
+                      <span className="oversight__who">
+                        {p && <ProjectDot color={p.color} />}
+                        {e ? <PersonLink employee={e} mark={false} /> : r.employeeId}
+                      </span>
+                      <span className="oversight__when">
+                        tydz. {isoWeek(r.week).week} · {r.dates.length} {r.dates.length === 1 ? "dzień" : "dni"}
+                      </span>
+                      <span className="oversight__what" data-tip={first ? approvalNote(model, r.projectId, r.employeeId, r.dates[0], first, now) : undefined}>
+                        {describeHours(first)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {list.length > SHOW && (
+                <button
+                  type="button"
+                  className="btn btn--quiet btn--sm"
+                  onClick={() =>
+                    setOpen((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(svId)) next.delete(svId);
+                      else next.add(svId);
+                      return next;
+                    })
+                  }
+                >
+                  {expanded ? "Pokaż mniej" : `Pokaż pozostałe (${list.length - SHOW})`}
+                </button>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -249,8 +352,7 @@ function PeopleDays({ projectId, week, rows }: { projectId: string; week: ISODat
             return (
               <tr key={employeeId}>
                 <th scope="row" className="days__person">
-                  {e && <PositionMark employee={e} />}
-                  <span className="days__name">{e?.name ?? employeeId}</span>
+                  {e ? <PersonLink employee={e} /> : <span className="days__name">{employeeId}</span>}
                 </th>
                 {days.map((d, i) => {
                   const entry = model.entry(projectId, employeeId, d);

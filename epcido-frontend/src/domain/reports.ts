@@ -7,7 +7,7 @@ import { ABSENCE_LABEL, EMPLOYMENT_LABEL, formatMonths, isEpcido, POSITION_LABEL
 import { epcidoShare, FIELD_POSITIONS, weeklyStaffing } from "./staffing";
 import { problemSummary, sheetsFor } from "./timesheets";
 import type { Employee, Project, Trade } from "./types";
-import { isFinal } from "./workflow";
+import { isComplete } from "./workflow";
 
 export type ReportId = "hours" | "sheets" | "people-hours" | "leaves" | "staffing" | "employees" | "withheld";
 
@@ -88,7 +88,7 @@ export function buildReport(model: Model, id: ReportId, o: ReportOptions, now: D
             if (d < o.from || d > o.to) continue;
             const sheet = sheets.of(p.id, d);
             const sent = sheet?.status === "sent";
-            if (o.status === "approved" && !isFinal(entry)) continue;
+            if (o.status === "approved" && !isComplete(p, employeeId, entry)) continue;
             if (o.status === "sent" && !sent) continue;
             rows.push([
               date(d),
@@ -195,7 +195,7 @@ export function buildReport(model: Model, id: ReportId, o: ReportOptions, now: D
           if (!personPasses(e, o)) continue;
           for (const [d, entry] of days) {
             if (d < o.from || d > o.to) continue;
-            if (o.status === "approved" && !isFinal(entry)) continue;
+            if (o.status === "approved" && !isComplete(p, employeeId, entry)) continue;
             if (o.status === "sent" && sheets.of(p.id, d)?.status !== "sent") continue;
             const key = `${employeeId}|${p.id}`;
             const row = map.get(key) ?? { e: e!, p, min: 0, days: 0, absent: 0 };
