@@ -20,7 +20,8 @@ Etapy, każdy z warunkiem przejścia:
 
 ## Konsekwencje
 
-- Zmienia się pozycja Enovy: z odbiorcy danych na system do wycofania. Integracja z Enovą w etapie 1 trwa, bo płace nadal z niej idą.
+- Enova nie łączy się z terminalem bezpośrednio. Połączenie jest pośrednie: Dataverse łączy się z Enovą, a terminal z Dataverse. Zmienia się rola Enovy: z systemu, z którego dane idą dalej, na system do wycofania. W etapie 1 integracja z Enovą trwa, bo płace nadal z niej idą. Co zastąpi Enovę w płacach (etap 3), jest do ustalenia.
+- Vercel jest tymczasowym hostingiem podglądu systemu. Docelowo wszystko ma działać w środowisku Microsoft, żeby dane były bezpieczniejsze.
 - Otwarte: architektura docelowa w Microsoft (Dataverse jako warstwa danych i interfejs, czy osobny backend z integracją). Do rozstrzygnięcia w osobnym ADR przed etapem 2.
 - Otwarte: źródło prawdy w etapie 1 (który system wygrywa przy rozjeździe danych).
 - Data pokazu dla COO: do ustalenia przez właściciela.

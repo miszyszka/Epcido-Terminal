@@ -5,7 +5,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje: SemVer
 ## [Unreleased]
 
 ### Zmiany
-- **Porządek w dokumentacji.** Dodano `README.md` w katalogu głównym (mapa repozytorium i zasady pracy). Odświeżono `epcido-frontend/README.md` (wersja 0.7.0, ścieżki do dokumentów). `docs/KONTYNUACJA.md`: PR #6 oznaczony jako scalony (19.10.2026), usunięto odwołanie do nieistniejącego pliku.
+- **Porządek w dokumentacji.** Dodano `README.md` w katalogu głównym (mapa repozytorium i zasady pracy). Odświeżono `epcido-frontend/README.md` (wersja 0.7.0, ścieżki do dokumentów). Usunięto `docs/KONTYNUACJA.md`: jego treść przeniesiono do wiedzy projektu (`claude/GENERAL_KNOWLEDGE.md`), a stan PR #6 (scalony 19.10.2026) był w nim nieaktualny.
 - Wersja w `package.json` ustawiona na 0.7.0 (była 0.0.0).
 - Dodano ADR 0013 (propozycja): cel nadrzędny, zastąpienie Enovy i Gantbee w środowisku Microsoft, etapami. Do przyjęcia przez właściciela.
 

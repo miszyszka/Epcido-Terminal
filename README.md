@@ -7,7 +7,7 @@ System planowania projektów, obsady i czasu pracy dla Epcido. Aplikacja jest w 
 | Co | Gdzie |
 |---|---|
 | Kod aplikacji (React + Firebase), uruchamianie | `epcido-frontend/README.md` |
-| Stan prac i kontynuacja (zacznij tutaj) | `epcido-frontend/docs/KONTYNUACJA.md` |
+| Stan prac i wiedza o projekcie | Projekt Claude „Epcido Terminal”: `claude/GENERAL_KNOWLEDGE.md` |
 | Cel, zakres, architektura, otwarte kwestie | `epcido-frontend/docs/PLAN_I_ARCHITEKTURA.md` |
 | Decyzje architektoniczne (ADR) | `epcido-frontend/docs/adr/` |
 | Historia wersji | `epcido-frontend/CHANGELOG.md` |

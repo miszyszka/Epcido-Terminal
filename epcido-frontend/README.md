@@ -1,7 +1,7 @@
 # Epcido Terminal
 
 System planowania projektów i czasu pracy dla Epcido — następca Gantbee.
-Etap: **prototyp 0.7.0** — planowanie, obsada, zatwierdzanie godzin, urlopy, ekran pracownika, administracja (React + Firebase). Plan i architektura docelowa: `docs/PLAN_I_ARCHITEKTURA.md`. Stan prac i kontynuacja: `docs/KONTYNUACJA.md`. Historia zmian: `CHANGELOG.md`.
+Etap: **prototyp 0.7.0** — planowanie, obsada, zatwierdzanie godzin, urlopy, ekran pracownika, administracja (React + Firebase). Plan i architektura docelowa: `docs/PLAN_I_ARCHITEKTURA.md`. Wiedza o projekcie i stan prac: `claude/GENERAL_KNOWLEDGE.md` w projekcie Claude. Historia zmian: `CHANGELOG.md`.
 
 ## Uruchomienie
 
