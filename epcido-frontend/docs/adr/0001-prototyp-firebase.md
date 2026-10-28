@@ -1,4 +1,4 @@
-# 0007. Prototyp widoku planisty na Firebase (Firestore)
+# 0001. Prototyp widoku planisty na Firebase (Firestore)
 
 - Status: Przyjęta
 - Data: 2026-10-16

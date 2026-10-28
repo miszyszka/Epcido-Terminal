@@ -1,4 +1,4 @@
-// Urlopy i nieobecności (ADR 0011): co zmienia zaakceptowanie wniosku w obsadzie projektów.
+// Urlopy i nieobecności (ADR 0005): co zmienia zaakceptowanie wniosku w obsadzie projektów.
 
 import type { Model } from "../app/DataContext";
 import { addDays, startOfWeek, type ISODate } from "../lib/dates";

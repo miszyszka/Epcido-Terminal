@@ -177,7 +177,7 @@ stateDiagram-v2
 - **Po eksporcie wpisów nie edytujemy.** Korekta tworzy rekord korygujący (+/- godziny), który trafia do kolejnej paczki. Dzięki temu Dataverse/Enova/BC zawsze mają spójną historię.
 - Eksport jest **idempotentny**: każdy rekord ma stały identyfikator zewnętrzny. Ponowne wysłanie nie tworzy duplikatów.
 - Każda paczka ma numer, sumy kontrolne (liczba rekordów, suma godzin) i raport sukcesów/błędów.
-- **Kto akceptuje** (rozstrzygnięte w ADR 0012): dzień członka zespołu (TL, elektryk, mechanik) domyka **supervisor projektu** i to jest akceptacja ostateczna; dzień samego supervisora domyka **Installation Manager projektu**. Project Manager nie akceptuje godzin w ogóle. Administrator może wszystko.
+- **Kto akceptuje** (rozstrzygnięte w ADR 0006): dzień członka zespołu (TL, elektryk, mechanik) domyka **supervisor projektu** i to jest akceptacja ostateczna; dzień samego supervisora domyka **Installation Manager projektu**. Project Manager nie akceptuje godzin w ogóle. Administrator może wszystko.
 - **Otwarte:** co z wpisami niezaakceptowanymi w terminie (pominąć i wysłać później / auto-akceptacja / blokada eksportu całości)?
 
 ---
@@ -507,7 +507,7 @@ Bez sztywnych dat, dopóki nie znamy dostępności zespołu i odpowiedzi nav24. 
 
 | Etap | Zakres | Kryterium ukończenia |
 |---|---|---|
-| **Etap 0 — Fundamenty** | Repo, CI/CD, środowiska dev/staging w Azure, IaC, szkielet modułów, auth, audyt, design system (podstawy), ADR 0001–0006, **kontrakt z nav24 + sandbox Dataverse** | Zalogowany użytkownik widzi pusty panel na staging; każda zmiana jest audytowana; jest dostęp do sandboxa Dataverse. |
+| **Etap 0 — Fundamenty** | Repo, CI/CD, środowiska dev/staging w Azure, IaC, szkielet modułów, auth, audyt, design system (podstawy), ADR fundamentów (numery od 0008), **kontrakt z nav24 + sandbox Dataverse** | Zalogowany użytkownik widzi pusty panel na staging; każda zmiana jest audytowana; jest dostęp do sandboxa Dataverse. |
 | **MVP-1 — Czas pracy end-to-end** | M1–M8, M14 podstawowe: synchronizacja pracowników, projekty, przypisania (lista), wpis godzin (PWA), akceptacja, eksport wtorek 23:00 do sandboxa | Pełny tydzień testowy przechodzi od wpisu do Dataverse bez ręcznych poprawek; nav24 potwierdza poprawność danych. |
 | **MVP-2 — Widok PM** | M9 przegląd tygodnia, M10 skill matrix, M11 koszty projektu, M12 raporty + Excel, tablica zespołu „jak Miro” | Pilot na 1 projekcie (równolegle z Gantbee) — zgodność godzin z Gantbee. |
 | **MVP-3 — Komunikacja** | M13 tablica ogłoszeń, wątki, reakcje, zdjęcia, wiadomości, potwierdzenia przeczytania | Pilotowy projekt używa tablicy przez 2 tygodnie. |
@@ -625,5 +625,5 @@ Co zyskujemy, co tracimy, co trzeba zrobić dalej.
 ## Następne kroki (najbliższe 2 tygodnie)
 1. Przejrzeć ten dokument w zespole (Ty, Valery, Jakub) i oznaczyć zgody/sprzeciwy przy sekcjach 6–7.
 2. Spotkanie z nav24: odpowiedzi na pytania 1–6 z sekcji 16, prośba o sandbox i Application User.
-3. Założyć repozytorium ze strukturą z sekcji 6.5 i 12.3, zapisać ADR 0001–0006.
+3. Założyć repozytorium ze strukturą z sekcji 6.5 i 12.3, zapisać ADR fundamentów (numery od 0008; 0001–0007 są już zajęte).
 4. Rozpisać przepływy UX dla 5 pierwszych ekranów (sekcja 13) — od nich zaczniemy dopracowywanie interfejsu.

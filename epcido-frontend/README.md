@@ -1,7 +1,7 @@
 # Epcido Terminal
 
 System planowania projektów i czasu pracy dla Epcido — następca Gantbee.
-Etap: **prototyp 0.6** — planowanie, obsada, zatwierdzanie godzin, urlopy, ekran pracownika, administracja (React + Firebase). Plan i architektura docelowa: `PLAN_I_ARCHITEKTURA.md` w projekcie.
+Etap: **prototyp 0.7.0** — planowanie, obsada, zatwierdzanie godzin, urlopy, ekran pracownika, administracja (React + Firebase). Plan i architektura docelowa: `docs/PLAN_I_ARCHITEKTURA.md`. Wiedza o projekcie i stan prac: `claude/GENERAL_KNOWLEDGE.md` w projekcie Claude. Historia zmian: `CHANGELOG.md`.
 
 ## Uruchomienie
 
@@ -51,13 +51,13 @@ U góry jest wyszukiwarka z podpowiedziami (projekty, ludzie, ekrany). Przycisk 
 
 ### Timesheet i wtorek
 
-**Timesheet = wszystkie godziny wszystkich pracowników jednego projektu w jednym tygodniu** (w tygodniu jest tyle timesheetów, ile projektów). Zatwierdza się po osobie do poniedziałku 23:59. Od wtorku 00:00 tydzień jest zamknięty (wyszarzony, w paski); kompletny timesheet idzie do Dataverse we wtorek 23:00. Jeśli choć jeden dzień nie jest zatwierdzony albo brakuje wpisu, **cały timesheet jest wstrzymany** — poprawia go tylko administrator, a pozostali widzą „Czas minął. Skontaktuj się z administratorem…". Szczegóły: `docs/adr/0010-…`.
+**Timesheet = wszystkie godziny wszystkich pracowników jednego projektu w jednym tygodniu** (w tygodniu jest tyle timesheetów, ile projektów). Zatwierdza się po osobie do poniedziałku 23:59. Od wtorku 00:00 tydzień jest zamknięty (wyszarzony, w paski); kompletny timesheet idzie do Dataverse we wtorek 23:00. Jeśli choć jeden dzień nie jest zatwierdzony albo brakuje wpisu, **cały timesheet jest wstrzymany** — poprawia go tylko administrator, a pozostali widzą „Czas minął. Skontaktuj się z administratorem…". Szczegóły: `docs/adr/0004-…`.
 
 Projekty mają kategorię (domyślnie KNAPP, KARDEX, FORTNA, OTHER — lista w ustawieniach) i zapotrzebowanie w fazach (od–do, elektrycy, mechanicy). Pracownicy mają umowę (UoP, B2B, agencja — **EPCIDO** to UoP i B2B, cel: co najmniej połowa na projekcie) i doświadczenie w miesiącach, łącznie i w każdej kategorii. Elektrycy mają w całym systemie kolor czerwony, mechanicy — niebieski.
 
 ### Urlopy i uprawnienia
 
-Urlop i inną nieobecność akceptuje supervisor albo Installation Manager projektu, w którym osoba wtedy pracuje, albo HR. L4 obowiązuje od zgłoszenia, HR potwierdza dokument. Zaakceptowane dni trafiają do timesheetu. Uprawnienia osoby = rola + dodane − odebrane (ekran Użytkownicy). Szczegóły: `docs/adr/0011-…`.
+Urlop i inną nieobecność akceptuje supervisor albo Installation Manager projektu, w którym osoba wtedy pracuje, albo HR. L4 obowiązuje od zgłoszenia, HR potwierdza dokument. Zaakceptowane dni trafiają do timesheetu. Uprawnienia osoby = rola + dodane − odebrane (ekran Użytkownicy). Szczegóły: `docs/adr/0005-…`.
 
 ### Kolory i znaki dni (obowiązują w całym systemie)
 

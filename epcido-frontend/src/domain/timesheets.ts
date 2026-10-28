@@ -1,4 +1,4 @@
-// Timesheet = wszystkie godziny wszystkich osób w jednym projekcie w jednym tygodniu (ADR 0010).
+// Timesheet = wszystkie godziny wszystkich osób w jednym projekcie w jednym tygodniu (ADR 0004).
 // W każdym tygodniu jest tyle timesheetów, ile projektów.
 //
 // Cykl (terminy w ustawieniach systemu, domyślnie pn 23:59 i wt 23:00):

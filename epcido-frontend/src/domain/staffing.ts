@@ -1,5 +1,5 @@
 // Obsada: kto gdzie pracuje w kolejnych tygodniach, gdzie brakuje ludzi, kto się zwalnia
-// i kto długo pracuje bez przerwy na wyjazd do domu. Narzędzie Planningu (ADR 0009).
+// i kto długo pracuje bez przerwy na wyjazd do domu. Narzędzie Planningu (ADR 0003).
 
 import type { Model } from "../app/DataContext";
 import { addDays, daysBetween, startOfWeek, type ISODate } from "../lib/dates";

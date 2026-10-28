@@ -1,9 +1,9 @@
-# 0009. Blokada po terminie, zmiany z notatką, zadania z przerwami, Obsada
+# 0003. Blokada po terminie, zmiany z notatką, zadania z przerwami, Obsada
 
 - Status: Przyjęta
 - Data: 2026-10-16
 - Decydujący: zespół Epcido Terminal
-- Zastępuje część ADR 0008: odrzucanie godzin („do poprawy") i termin edycji
+- Zastępuje część ADR 0002: odrzucanie godzin („do poprawy") i termin edycji
 
 ## Kontekst
 

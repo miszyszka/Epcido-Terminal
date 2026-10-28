@@ -1,6 +1,6 @@
-# 0008. Role, ścieżka zatwierdzania, terminy i okresy pracy
+# 0002. Role, ścieżka zatwierdzania, terminy i okresy pracy
 
-- Status: Przyjęta, częściowo zastąpiona przez ADR 0009 (odrzucanie i termin edycji)
+- Status: Przyjęta, częściowo zastąpiona przez ADR 0003 (odrzucanie i termin edycji)
 - Data: 2026-10-16
 - Decydujący: zespół Epcido Terminal
 

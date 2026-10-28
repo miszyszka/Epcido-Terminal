@@ -1,9 +1,9 @@
-# 0011. Urlopy z akceptacją, uprawnienia per osoba, ustawienia systemu, raporty Excel, Obsada 3.0
+# 0005. Urlopy z akceptacją, uprawnienia per osoba, ustawienia systemu, raporty Excel, Obsada 3.0
 
 - Status: Przyjęta
 - Data: 2026-10-17
 - Decydujący: zespół Epcido Terminal
-- Zmienia: ADR 0008 (role), ADR 0009 (nieobecność zatwierdzana z godzinami), ADR 0010 (terminy na sztywno, „nasi")
+- Zmienia: ADR 0002 (role), ADR 0003 (nieobecność zatwierdzana z godzinami), ADR 0004 (terminy na sztywno, „nasi")
 
 ## Kontekst
 
