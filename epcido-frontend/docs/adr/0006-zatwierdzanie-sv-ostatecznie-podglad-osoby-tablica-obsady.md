@@ -1,9 +1,9 @@
-# 0012. Supervisor zatwierdza ostatecznie, Installation Manager widzi całą firmę, podgląd osoby i jedna oś tablicy obsady
+# 0006. Supervisor zatwierdza ostatecznie, Installation Manager widzi całą firmę, podgląd osoby i jedna oś tablicy obsady
 
 - Status: Przyjęta
 - Data: 2026-10-19
 - Decydujący: zespół Epcido Terminal (właściciel)
-- Zmienia: ADR 0008 (dwustopniowe zatwierdzanie), ADR 0011 (zakres projektów Installation Managera)
+- Zmienia: ADR 0002 (dwustopniowe zatwierdzanie), ADR 0005 (zakres projektów Installation Managera)
 
 ## Kontekst
 

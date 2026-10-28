@@ -70,7 +70,7 @@ export const PERMISSION_ORDER = PERMISSION_GROUPS.flatMap((g) => g.items);
 export const ROLE_PERMISSIONS: Record<AccessRole, Permission[]> = {
   ADMIN: PERMISSION_ORDER.filter((p) => !["projects.own", "hours.own", "leave.own", "leave.approveProject"].includes(p)),
   PLANNING: ["projects.all", "project.create", "project.edit", "map.view", "team.plan", "staffing.plan", "people.view", "structure.view", "leave.view"],
-  // Project Manager prowadzi projekt, ale godzin nie zatwierdza — nigdy (ADR 0012)
+  // Project Manager prowadzi projekt, ale godzin nie zatwierdza — nigdy (ADR 0006)
   PROJECT_MANAGER: ["projects.own", "project.create", "project.edit", "map.view", "structure.view"],
   // Installation Manager widzi wszystkie projekty (swoje i innych IM), zatwierdza tylko godziny swoich supervisorów
   INSTALLATION_MANAGER: [

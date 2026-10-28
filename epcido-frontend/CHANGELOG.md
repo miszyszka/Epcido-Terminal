@@ -7,7 +7,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje: SemVer
 ### Zmiany
 - **Porządek w dokumentacji.** Dodano `README.md` w katalogu głównym (mapa repozytorium i zasady pracy). Odświeżono `epcido-frontend/README.md` (wersja 0.7.0, ścieżki do dokumentów). Usunięto `docs/KONTYNUACJA.md`: jego treść przeniesiono do wiedzy projektu (`claude/GENERAL_KNOWLEDGE.md`), a stan PR #6 (scalony 19.10.2026) był w nim nieaktualny.
 - Wersja w `package.json` ustawiona na 0.7.0 (była 0.0.0).
-- Dodano ADR 0013 (propozycja): cel nadrzędny, zastąpienie Enovy i Gantbee w środowisku Microsoft, etapami. Do przyjęcia przez właściciela.
+- ADR renumerowane od 0001 (wcześniej zaczynały się od 0007). Odwołania w kodzie (komentarze), dokumentach i CHANGELOG zaktualizowane. Zmiana tylko numerów i komentarzy, bez zmiany zachowania.
+- Dodano ADR 0007 (propozycja): cel nadrzędny, zastąpienie Enovy i Gantbee w środowisku Microsoft, etapami. Do przyjęcia przez właściciela.
 
 ## [0.7.0] - 2026-10-19
 
@@ -20,7 +21,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje: SemVer
 - **Potwierdzenie przed zapisem.** Zapis projektu i planu zespołu, porzucenie niezapisanych zmian, przeciągnięcie osoby na tydzień projektu, propozycja obsady, „Zaplanuj", „Przerwa" i zaznaczenie okresu pokazują listę zmian i pytają, zanim cokolwiek trafi do bazy.
 
 ### Zmiany
-- **Godziny zatwierdza się raz.** Supervisor zatwierdza dni zespołu (TL, elektrycy, mechanicy) i to jest zatwierdzenie ostateczne — timesheet domyka się bez udziału Installation Managera. IM zatwierdza wyłącznie godziny swoich supervisorów. Project Manager nie zatwierdza godzin w ogóle. Szczegóły i ryzyka: ADR 0012.
+- **Godziny zatwierdza się raz.** Supervisor zatwierdza dni zespołu (TL, elektrycy, mechanicy) i to jest zatwierdzenie ostateczne — timesheet domyka się bez udziału Installation Managera. IM zatwierdza wyłącznie godziny swoich supervisorów. Project Manager nie zatwierdza godzin w ogóle. Szczegóły i ryzyka: ADR 0006.
 - **Installation Manager widzi wszystkie projekty firmy** — z filtrem „Moje / Innych IM / Wszystkie" i znacznikiem przy każdym projekcie, w Pulpicie, na Mapie, Osi czasu, w Strukturze i Obsadzie.
 - **Obsada ma jedną oś tygodni**, przyklejoną do góry ekranu: przy najniższym projekcie wciąż widać, od którego tygodnia zaczyna się kolumna, a moduł „Ludzie" stoi dokładnie pod projektami — tygodnie pokrywają się w pionie.
 - **Szary pasek w planie zespołu** („ta sama osoba w innym projekcie") jest teraz przyciskiem — kliknięcie otwiera tamten projekt.

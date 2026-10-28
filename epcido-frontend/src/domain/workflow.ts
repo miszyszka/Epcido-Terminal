@@ -1,4 +1,4 @@
-// Zasady cyklu tygodnia (PLAN_I_ARCHITEKTURA.md, sekcja 5; ADR 0009, 0010, 0011):
+// Zasady cyklu tygodnia (PLAN_I_ARCHITEKTURA.md, sekcja 5; ADR 0003, 0004, 0005):
 //  - tydzień = poniedziałek–niedziela; timesheet = projekt × tydzień (wszyscy ludzie projektu),
 //  - godziny tygodnia trzeba wpisać i zatwierdzić do terminu (domyślnie poniedziałek następnego tygodnia, 23:59),
 //  - minutę po terminie tydzień jest zamknięty: kompletny timesheet jest nienaruszalny i idzie do Dataverse
@@ -60,7 +60,7 @@ export function nextExportAfter(t: Date): Date {
 }
 
 /**
- * Kto domyka dzień danej osoby w projekcie (ADR 0012):
+ * Kto domyka dzień danej osoby w projekcie (ADR 0006):
  *  - zespół (TL, elektryk, mechanik) — supervisor projektu i to jest zatwierdzenie ostateczne,
  *  - sam supervisor — Installation Manager projektu (nikt nie zatwierdza własnych godzin).
  * Project Manager nie zatwierdza godzin w ogóle.

@@ -1,9 +1,9 @@
-# 0010. Timesheet = projekt × tydzień, wstrzymanie całego timesheetu, kategorie, zapotrzebowanie w fazach, Obsada 2.0
+# 0004. Timesheet = projekt × tydzień, wstrzymanie całego timesheetu, kategorie, zapotrzebowanie w fazach, Obsada 2.0
 
 - Status: Przyjęta
 - Data: 2026-10-17
 - Decydujący: zespół Epcido Terminal
-- Zastępuje część ADR 0009: definicję timesheetu i stan „nie wysłane" liczony po dniu; pola `needElectricians` / `needMechanics`
+- Zastępuje część ADR 0003: definicję timesheetu i stan „nie wysłane" liczony po dniu; pola `needElectricians` / `needMechanics`
 
 ## Kontekst
 
@@ -19,7 +19,7 @@ Ustalenia z użytkownikiem (2026-10-17): wstrzymywany jest **cały** timesheet; 
 
 **Timesheet** (`src/domain/timesheets.ts`):
 - Klucz: `projectId + poniedziałek tygodnia`. Statusy:
-  - `open` — przed wtorkiem 00:00 po tygodniu; godziny zmienia się wg ADR 0009;
+  - `open` — przed wtorkiem 00:00 po tygodniu; godziny zmienia się wg ADR 0003;
   - `closed` — tydzień zamknięty, wszystko w porządku, czeka na wtorek 23:00;
   - `sent` — wysłany do Dataverse; nikt nic nie zmienia;
   - `withheld` — zamknięty z błędami, nic z niego nie poszło.
