@@ -1,10 +1,10 @@
 # Epcido Terminal: instrukcja kontynuacji pracy
 
-Stan na 19.10.2026, wersja prototypu **0.7.0** (PR #6). Dokument jest dla każdego, kto przejmuje pracę w nowej rozmowie z Claude albo w zespole (Valery, Jakub). Kto zacznie od tego pliku, nie musi znać wcześniejszych rozmów.
+Stan na 28.10.2026, wersja prototypu **0.7.0** (PR #6, scalony 19.10.2026). Dokument jest dla każdego, kto przejmuje pracę w nowej rozmowie z Claude albo w zespole (Valery, Jakub). Kto zacznie od tego pliku, nie musi znać wcześniejszych rozmów.
 
 ## 1. Czym jest projekt
 
-Epcido Terminal zastępuje Gantbee w Epcido, partnerze instalacyjnym: ok. 40 projektów jednocześnie, mechanicy i elektrycy, ok. 500 osób. System obejmuje planowanie projektów i obsady, rejestrację i zatwierdzanie godzin, urlopy, uprawnienia i raporty. Jedyna integracja zewnętrzna to Dataverse (administruje nim nav24), przez które godziny trafiają do Business Central i Enovy.
+Epcido Terminal zastępuje Gantbee w Epcido, partnerze instalacyjnym (cel nadrzędny z 28.10.2026: zastąpić także Enovę, w środowisku Microsoft; patrz ADR 0013): ok. 40 projektów jednocześnie, mechanicy i elektrycy, ok. 500 osób. System obejmuje planowanie projektów i obsady, rejestrację i zatwierdzanie godzin, urlopy, uprawnienia i raporty. Jedyna integracja zewnętrzna to Dataverse (administruje nim nav24), przez które godziny trafiają do Business Central i Enovy.
 
 Zasady od właściciela, których nie wolno łamać:
 
@@ -22,12 +22,12 @@ Zasady od właściciela, których nie wolno łamać:
 |---|---|
 | Kod (React) | repozytorium GitHub `miszyszka/Epcido-Terminal`, katalog `epcido-frontend/` |
 | Dokumentacja w repo | `epcido-frontend/docs/` (ten plik, `PLAN_I_ARCHITEKTURA.md`, `BRANDBOOK.md`, `adr/`) i `CHANGELOG.md` |
-| Dokumentacja w projekcie Claude „Epcido Terminal” | `claude/WYMAGANIA_NIEFUNKCJONALNE.md`, `claude/BRANDBOOK.md`, `claude/KONTYNUACJA.md` (kopia tego pliku), `ERP Fase 2.docx`, `prezentacja erp.pdf`, `zrzut 1.txt` |
+| Dokumentacja w projekcie Claude „Epcido Terminal” | `claude/WYMAGANIA_NIEFUNKCJONALNE.md`, `claude/BRANDBOOK.md`, `claude/KONTYNUACJA.md` (kopia tego pliku), `ERP Fase 2.docx`, `prezentacja erp.pdf` |
 | Baza prototypu | Firebase, projekt `epcido-terminal`, Firestore w europe-central2 |
 
 Uwaga: nazwa repozytorium w GitHubie to `Epcido-Terminal`, a adres w `git remote` jest pisany małymi literami. Oba działają.
 
-Gałęzie i wersje: każda wersja to osobna gałąź `vX.Y-opis` i PR do `main`. Zamknięte i scalone: 0.2 (PR #1) do 0.6 (PR #5). **PR #6 (0.7) jest otwarty** do przeglądu właściciela.
+Gałęzie i wersje: każda wersja to osobna gałąź `vX.Y-opis` i PR do `main`. Zamknięte i scalone: 0.2 (PR #1) do 0.7 (PR #6, merge `c98bf1b`, 19.10.2026).
 
 ## 3. Jak Claude ma dostęp do repozytorium i jak robi pushe
 
@@ -138,7 +138,7 @@ Zasady docelowe bez zmian względem 0.6: modularny monolit, jedna baza PostgreSQ
 ## 8. Co zrobić na początku nowej rozmowy
 
 1. Przeczytać ten plik, `CHANGELOG.md` (sekcja 0.7.0) i najnowszy ADR (`0012-…`).
-2. Sprawdzić stan: `git status -sb`, `git log --oneline | head`, `gh pr view 6`. Jeśli PR #6 jest scalony, zaczynać od świeżego `main`.
+2. Sprawdzić stan: `git status -sb`, `git log --oneline | head`, `gh pr view 6`. PR #6 jest scalony, więc zaczynać od świeżego `main`.
 3. Zapytać właściciela o priorytet, jeśli nie wskazał go sam. Nie zaczynać od dużej przebudowy bez pytania.
 4. Pracować w gałęzi `vX.Y-opis`, dopisać wpis w `CHANGELOG.md`, ADR dla każdej decyzji architektonicznej, zaktualizować brandbook przy zmianach wyglądu.
 5. Na końcu: build, lint, test w przeglądarce, PR, krótkie podsumowanie po polsku z ograniczeniami.
@@ -156,7 +156,7 @@ Do decyzji właściciela:
 
 Do zrobienia technicznie, w tej kolejności:
 
-1. Merge PR #6.
+1. Merge PR #6 — zrobione 19.10.2026.
 2. Testy E2E do repozytorium plus CI (GitHub Actions: tsc, lint, build, E2E).
 3. Logowanie i reguły oparte o role (krok pośredni) albo od razu start backendu.
 4. ADR o hostingu i o schemacie PostgreSQL; kontrakt Dataverse z nav24.
